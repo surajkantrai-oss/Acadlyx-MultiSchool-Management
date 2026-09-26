@@ -17,6 +17,7 @@
     "@acadlyx/api-client": "workspace:*",
     "@acadlyx/constants": "workspace:*",
     "@acadlyx/mobile-ui": "workspace:*",
+    "@acadlyx/tenant-config": "workspace:*",
     "expo": "~57.0.25",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",

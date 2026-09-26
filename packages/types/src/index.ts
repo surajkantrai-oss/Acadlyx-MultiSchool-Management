@@ -21,6 +21,8 @@ export interface HealthResponse {
 export interface ApiErrorResponse {
   statusCode: number;
   error: string;
+  /** Stable machine-readable code for domain errors, e.g. TENANT_NOT_FOUND. */
+  code?: string;
   message: string | string[];
   requestId: string | null;
   timestamp: string;

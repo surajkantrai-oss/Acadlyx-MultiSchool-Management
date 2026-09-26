@@ -1,7 +1,9 @@
-# Security foundation (Phase 1)
+# Security
 
-Phase 1 provides global security primitives only. Authentication, MFA and RBAC are Phase 3.
-Tenant isolation and RLS are Phase 2.
+Phase 1 provided global security primitives. Phase 2 added tenant isolation. Authentication,
+MFA and RBAC arrive in Phase 3; until then **Platform Admin and the platform API are
+unauthenticated** and must stay an internal/development surface. No temporary passwords, fake
+tokens or secret headers were added to simulate protection.
 
 | Control            | Implementation                                                                                                                                           |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -14,8 +16,35 @@ Tenant isolation and RLS are Phase 2.
 | Safe errors        | Global filter. 5xx responses never expose internals.                                                                                                     |
 | Log redaction      | Authorization, cookies, API keys and `password`/`pin`/`otp`/`token`/`secret` fields are redacted                                                         |
 | Rate limiting      | `@nestjs/throttler` global guard (in-memory; switch to Redis storage before running more than one instance)                                              |
-| Audit logging      | `AuditService.record()` integration point. It writes to structured logs until the AuditLog table exists.                                                 |
+| Audit logging      | Tenant-management actions are recorded to structured logs (request id, tenant, changed field names, actor placeholder). Persistence arrives in Phase 3.  |
 | Proxy awareness    | `TRUST_PROXY` for correct client IPs behind a load balancer                                                                                              |
+
+## Tenant isolation (Phase 2)
+
+Full design: [../architecture/MULTI_TENANCY.md](../architecture/MULTI_TENANCY.md).
+
+- **How tenant context is established:** `TenantResolutionMiddleware` resolves the tenant from
+  `Host` (verified domains; unverified `*.localhost` only outside production) or, as a fallback,
+  the public `X-Acadlyx-Tenant-Key`. Conflicts are rejected. The result is stored in a
+  per-request `AsyncLocalStorage` context, and `TenantGuard` enforces 404/400/403.
+- **How context reaches the database:** `TenantPrismaService.run()` opens a transaction as
+  `acadlyx_app` and binds the tenant id with the transaction-local
+  `set_config('app.tenant_id', $1, true)`.
+- **What prevents cross-tenant access:** automatic query scoping (which also rejects explicit
+  cross-tenant targets), then PostgreSQL RLS with FORCE on every tenant table. A missing context
+  yields zero rows.
+- **What RLS protects:** every statement issued as `acadlyx_app`, including raw SQL and buggy
+  application code. It cannot be disabled by that role (`row_security = off` errors).
+- **What application guards protect:** unknown, conflicting or non-ACTIVE tenants never reach
+  handlers, and tenant code cannot obtain the platform client (module wiring plus an ESLint rule).
+- **How leaks are avoided:** the setting is transaction-scoped, so pooled connections carry
+  nothing between requests. Tests alternate A/B/A/B on one pooled connection and run up to 60
+  concurrent mixed-tenant requests.
+- **Platform path:** `acadlyx` has BYPASSRLS by design. It is used only by platform routes and
+  tenant resolution. Never pass it into tenant-scoped modules.
+- **Public data only:** the tenant bootstrap returns no internal ids, domains or private settings.
+  Branding values are validated (https URLs, hex colours, text without `<` or `>`), and School
+  Admin applies only validated colours as CSS variables.
 
 ## Conventions for later phases
 

@@ -15,6 +15,8 @@
   "dependencies": {
     "@acadlyx/api-client": "workspace:*",
     "@acadlyx/constants": "workspace:*",
+    "@acadlyx/tenant-config": "workspace:*",
+    "@acadlyx/validation": "workspace:*",
     "@acadlyx/web-ui": "workspace:*",
     "next": "16.3.6",
     "react": "19.2.3",

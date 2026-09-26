@@ -2,20 +2,24 @@
 
 Items noticed during Phase 1 that were intentionally **not** implemented.
 
-## Phase 2 — Multi-Tenancy & Platform Super Admin
+## Noted during Phase 2 (deliberately not implemented)
 
-- First Prisma migration: Tenant, TenantDomain, TenantBranding, TenantFeature, configuration.
-- Tenant resolver (web domain → tenant; mobile build `TENANT_KEY` → tenant) placed before controllers.
-- PostgreSQL RLS policies plus cross-tenant negative tests in CI (blueprint §26.3).
-- Fill `@acadlyx/tenant-config` (tenant key, theme tokens, feature flags).
-- Tenant-config cache in Redis.
+- Redis caching of tenant resolution/bootstrap (keyed by normalised domain/key, invalidated on
+  update). Correctness first: every tenant request currently reads PostgreSQL.
+- Automated DNS verification of custom domains (`verified_at` is set manually today).
+- Media uploads for logos/images (branding stores https URLs only).
+- Per-feature configuration payloads (flags are boolean today).
+- Tenant branches (blueprint §3.1): later school-structure phase.
+- Branded native mobile builds per tenant (app id, icons, store listing): white-label build phase.
 
 ## Phase 3 — Authentication & RBAC
 
 - Fill `@acadlyx/permissions` with the permission catalogue (blueprint §5.7).
 - Stricter `@Throttle()` limits on login/OTP routes. Move throttler storage to Redis.
 - Attach auth headers through `createApiClient({ getHeaders })`.
-- Persist `AuditService` events to a tenant-scoped AuditLog table.
+- Persist `AuditService` events to a tenant-scoped AuditLog table, with real actor identity
+  replacing `unauthenticated-platform-dev`.
+- Protect `/api/v1/platform/*` and the Platform Admin app (Platform Super Admin role + MFA).
 
 ## CI/CD and deployment phases
 

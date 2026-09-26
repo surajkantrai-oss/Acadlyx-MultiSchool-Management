@@ -40,6 +40,34 @@ export default tseslint.config(
     },
   },
   {
+    // Architectural boundary: tenant-scoped code must never reach the platform (RLS-bypassing)
+    // database client. Use TenantPrismaService.
+    files: ['apps/backend/src/tenant-api/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/database/platform-prisma.service*', '**/database/database.module*'],
+              message: 'Tenant-scoped code must use TenantPrismaService, not the platform client.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // supertest exposes response bodies as untyped JSON; e2e specs assert their shape at runtime.
+    files: ['apps/backend/test/**/*.e2e-spec.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+    },
+  },
+  {
     files: ['**/*.mjs', '**/*.config.ts'],
     ...tseslint.configs.disableTypeChecked,
   },

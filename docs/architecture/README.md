@@ -46,17 +46,17 @@ The backend is **ESM** (NestJS 12 is ESM-only), so relative imports use `.js` su
 
 ## Shared packages
 
-| Package         | Phase 1 contents                                                             |
-| --------------- | ---------------------------------------------------------------------------- |
-| `constants`     | App name, `/api/v1` prefix, health path, request-id header, dev ports        |
-| `types`         | `HealthResponse`, `ApiErrorResponse`, `AppEnvironment`                       |
-| `validation`    | zod plus env primitives (`originListSchema`, `portSchema`, `logLevelSchema`) |
-| `utils`         | `joinUrl`, `assertNever`, `isNonEmptyString`                                 |
-| `api-client`    | `createApiClient({ baseUrl, getHeaders })`, `ApiError`, `health()`           |
-| `web-ui`        | Unbranded `AppShell`, `Card`, `Button` (Tailwind classes)                    |
-| `mobile-ui`     | Unbranded `Screen`, `Heading`, `BodyText`                                    |
-| `permissions`   | Empty. Filled in Phase 3 (RBAC).                                             |
-| `tenant-config` | Empty. Filled in Phase 2 (tenancy/white-label).                              |
+| Package         | Phase 1 contents                                                                          |
+| --------------- | ----------------------------------------------------------------------------------------- |
+| `constants`     | App name, `/api/v1` prefix, health path, request-id header, dev ports                     |
+| `types`         | `HealthResponse`, `ApiErrorResponse`, `AppEnvironment`                                    |
+| `validation`    | zod plus env primitives (`originListSchema`, `portSchema`, `logLevelSchema`)              |
+| `utils`         | `joinUrl`, `assertNever`, `isNonEmptyString`                                              |
+| `api-client`    | `createApiClient({ baseUrl, getHeaders })`, `ApiError`, `health()`                        |
+| `web-ui`        | Unbranded `AppShell`, `Card`, `Button` (Tailwind classes)                                 |
+| `mobile-ui`     | Unbranded `Screen`, `Heading`, `BodyText`                                                 |
+| `permissions`   | Empty. Filled in Phase 3 (RBAC).                                                          |
+| `tenant-config` | Lifecycle rules, feature registry, configuration registry, tenant API contracts (Phase 2) |
 
 Packages compile with `tsc` to `dist/` (ESM + `.d.ts`). Run `pnpm build:packages` before
 typechecking or starting an app. The root `dev`, `typecheck` and `test` scripts do this
@@ -92,10 +92,15 @@ commands.
 - Production secrets will come from AWS Secrets Manager or the task environment (deployment
   phase).
 
-## Readiness for Phase 2 (multi-tenancy)
+## Multi-tenancy (Phase 2)
 
-- The request pipeline has a clear place for a tenant resolver (a middleware or guard before
-  controllers).
-- `api-client.getHeaders` is the hook for tenant and auth headers.
-- `tenant-config` and `permissions` packages already exist and are wired into the workspace.
-- Prisma is ready for the first real migration (Tenant, TenantDomain, ...).
+The backend has two scopes. `PlatformModule` (`/api/v1/platform`, platform DB role) manages
+tenants. `TenantApiModule` (`/api/v1/tenant`) resolves the tenant per request and reaches the
+database only through `TenantPrismaService` (restricted role, automatic scoping, PostgreSQL RLS).
+See [MULTI_TENANCY.md](MULTI_TENANCY.md).
+
+| Module              | Responsibility                                                                      |
+| ------------------- | ----------------------------------------------------------------------------------- |
+| `tenancy/`          | Resolver, AsyncLocalStorage context, guard, tenant Prisma client and scoping        |
+| `tenant-api/`       | Tenant-scoped controllers (Phase 2: `GET /tenant/bootstrap`)                        |
+| `platform/tenants/` | Platform Admin APIs: tenants, lifecycle, domains, branding, features, configuration |

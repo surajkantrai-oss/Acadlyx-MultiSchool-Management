@@ -23,13 +23,13 @@ jobs:
       postgres:
         image: postgres:17-alpine
         env:
-          POSTGRES_DB: acadlyx
-          POSTGRES_USER: acadlyx
-          # CI-only throwaway database password; not a real secret.
-          POSTGRES_PASSWORD: acadlyx_ci
+          # Superuser for one-time role setup only; the app never connects as it.
+          # CI-only throwaway passwords; not real secrets.
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres_ci
         ports: ['5432:5432']
         options: >-
-          --health-cmd "pg_isready -U acadlyx -d acadlyx"
+          --health-cmd "pg_isready -U postgres"
           --health-interval 5s --health-timeout 5s --health-retries 10
       redis:
         image: redis:8-alpine
@@ -41,6 +41,7 @@ jobs:
     # Backend configuration for e2e tests and Prisma (mirrors apps/backend/.env.example).
     env:
       DATABASE_URL: postgresql://acadlyx:acadlyx_ci@localhost:5432/acadlyx?schema=public
+      DATABASE_APP_URL: postgresql://acadlyx_app:acadlyx_app_ci@localhost:5432/acadlyx?schema=public
       REDIS_URL: redis://localhost:6379/0
       CORS_ORIGINS: http://localhost:4001,http://localhost:4002
       API_PUBLIC_URL: http://localhost:4000
@@ -63,6 +64,20 @@ jobs:
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
 
+      - name: Create database roles (owner with BYPASSRLS, restricted acadlyx_app)
+        env:
+          PGPASSWORD: postgres_ci
+        run: >-
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1
+          -v owner_password="'acadlyx_ci'" -v app_password="'acadlyx_app_ci'"
+          -f apps/backend/prisma/setup-roles.sql
+
+      - name: Apply migrations
+        run: pnpm db:migrate:deploy
+
+      - name: Migration status
+        run: pnpm db:status
+
       - name: Format check
         run: pnpm format:check
 
@@ -77,6 +92,16 @@ jobs:
 
       - name: Build (packages, backend, web apps)
         run: pnpm build
+
+      - name: School Admin HTTP status e2e (API + next start)
+        run: |
+          (cd apps/backend && node dist/main.js > "$RUNNER_TEMP/api.log" 2>&1 &)
+          (cd apps/school-admin && pnpm start > "$RUNNER_TEMP/school-admin.log" 2>&1 &)
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null http://localhost:4000/api/v1/health && curl -s -o /dev/null http://127.0.0.1:4002 && break
+            sleep 2
+          done
+          pnpm test:e2e:school-admin || { cat "$RUNNER_TEMP/api.log" "$RUNNER_TEMP/school-admin.log"; exit 1; }
 
       - name: Validate mobile (tsc, expo dependency check, iOS/Android bundle export)
         run: pnpm validate:mobile

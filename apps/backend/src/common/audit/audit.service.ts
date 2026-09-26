@@ -1,17 +1,26 @@
 import { Injectable, Logger } from '@nestjs/common';
 
 /**
- * Audit logging integration point.
+ * Audit logging.
  *
- * Phase 1 emits audit events to the structured log only. The persistent, tenant-scoped
- * AuditLog table (blueprint §26.2) is introduced together with tenancy/auth, at which
- * point this service writes to the database without changing its callers.
+ * Events are emitted to the structured log (nestjs-pino binds the current request, so each
+ * line carries req.id / requestId). Persistence to a tenant-scoped AuditLog table arrives with
+ * authentication in Phase 3; callers will not change.
+ *
+ * Actor: until Phase 3 there is no authenticated identity, so platform actions are recorded
+ * as `unauthenticated-platform-dev`. This is a truthful placeholder, not an identity.
  */
+export const UNAUTHENTICATED_PLATFORM_ACTOR = 'unauthenticated-platform-dev';
+
 export interface AuditEvent {
   action: string;
   resourceType: string;
   resourceId?: string;
-  actorId?: string;
+  actor?: string;
+  tenantId?: string;
+  tenantKey?: string;
+  /** Names of changed fields only — values are omitted to keep secrets out of logs. */
+  changedFields?: string[];
   metadata?: Record<string, unknown>;
 }
 
@@ -20,6 +29,11 @@ export class AuditService {
   private readonly logger = new Logger('Audit');
 
   record(event: AuditEvent): void {
-    this.logger.log({ audit: event }, `audit:${event.action}`);
+    const audit = {
+      ...event,
+      actor: event.actor ?? UNAUTHENTICATED_PLATFORM_ACTOR,
+      at: new Date().toISOString(),
+    };
+    this.logger.log({ audit }, `audit:${event.action}`);
   }
 }

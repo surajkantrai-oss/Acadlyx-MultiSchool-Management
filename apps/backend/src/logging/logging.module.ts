@@ -39,6 +39,9 @@ export function resolveRequestId(req: IncomingMessage, res: ServerResponse): str
         pinoHttp: {
           level: config.get('LOG_LEVEL'),
           genReqId: resolveRequestId,
+          // Tenant identity (never configuration values) for tenant-scoped requests.
+          customProps: (req: IncomingMessage & { tenantLog?: Record<string, string> }) =>
+            req.tenantLog ?? {},
           redact: { paths: REDACT_PATHS, censor: '[REDACTED]' },
           // Structured JSON in staging/production (CloudWatch-ready); pretty output locally.
           ...(config.get('NODE_ENV') === 'development'

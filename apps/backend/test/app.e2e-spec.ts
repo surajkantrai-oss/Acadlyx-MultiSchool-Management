@@ -9,7 +9,7 @@ import { configureApp } from '../src/app/configure-app.js';
 import { RedisService } from '../src/cache/redis.service.js';
 import { AppConfigService } from '../src/config/app-config.service.js';
 import type { Env } from '../src/config/env.schema.js';
-import { PrismaService } from '../src/database/prisma.service.js';
+import { PlatformPrismaService } from '../src/database/platform-prisma.service.js';
 
 // Test-only queue proving the BullMQ foundation can open a Redis connection.
 const PROBE_QUEUE = 'phase1-connectivity-probe';
@@ -95,7 +95,7 @@ describe('Acadlyx API foundation (e2e)', () => {
   });
 
   it('connects to PostgreSQL through Prisma', async () => {
-    await expect(app.get(PrismaService).isHealthy()).resolves.toBe(true);
+    await expect(app.get(PlatformPrismaService).isHealthy()).resolves.toBe(true);
   });
 
   it('connects to Redis', async () => {

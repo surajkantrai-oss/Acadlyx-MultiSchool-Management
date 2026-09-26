@@ -3,7 +3,7 @@ import type { HealthResponse } from '@acadlyx/types';
 import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
 import type { Response } from 'express';
-import { PrismaService } from '../database/prisma.service.js';
+import { PlatformPrismaService } from '../database/platform-prisma.service.js';
 import { RedisService } from '../cache/redis.service.js';
 
 const CHECK_TIMEOUT_MS = 2_000;
@@ -23,7 +23,7 @@ function withTimeout(check: Promise<boolean>): Promise<boolean> {
 @Controller(HEALTH_PATH)
 export class HealthController {
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly prisma: PlatformPrismaService,
     private readonly redis: RedisService,
   ) {}
 

@@ -20,15 +20,38 @@ Ports 3000–3002 are left free on purpose so Acadlyx can run alongside other lo
 brew services start postgresql@17
 ```
 
-One-time creation of the role and database (choose your own password):
+One-time creation of both roles and the database. Run it as a PostgreSQL superuser (with
+Homebrew, that's your macOS user). It is idempotent, and you choose the passwords:
 
 ```bash
-psql -h localhost -d postgres -c "CREATE ROLE acadlyx LOGIN CREATEDB PASSWORD '<password>';"
-psql -h localhost -d postgres -c "CREATE DATABASE acadlyx OWNER acadlyx;"
+psql -h localhost -d postgres -v owner_password="'<owner-password>'" -v app_password="'<app-password>'" -f apps/backend/prisma/setup-roles.sql
 ```
 
-Then set `DATABASE_URL=postgresql://acadlyx:<password>@localhost:5432/acadlyx?schema=public`
-in `apps/backend/.env`.
+Then set both URLs in `apps/backend/.env`:
+
+```
+DATABASE_URL=postgresql://acadlyx:<owner-password>@localhost:5432/acadlyx?schema=public
+DATABASE_APP_URL=postgresql://acadlyx_app:<app-password>@localhost:5432/acadlyx?schema=public
+```
+
+Apply migrations and load the demo tenants:
+
+```bash
+pnpm db:migrate:deploy
+pnpm db:seed
+```
+
+## Local tenant domains
+
+Browsers and curl resolve any `*.localhost` host name to 127.0.0.1, so no hosts-file changes are
+needed. In non-production environments, unverified `*.localhost` tenant domains resolve (verified
+domains only in production). The port is ignored during resolution, so `school-a.localhost` works
+on both 4000 (API) and 4002 (School Admin).
+
+- http://school-a.localhost:4002 and http://school-b.localhost:4002 show the same School Admin
+  code with different tenant branding.
+- API: `curl -H 'Host: school-a.localhost' http://localhost:4000/api/v1/tenant/bootstrap`
+- Mobile: `EXPO_PUBLIC_TENANT_KEY=SCHOOL_A` in `apps/mobile/.env`, then restart Metro.
 
 ## Redis (native Homebrew, primary)
 

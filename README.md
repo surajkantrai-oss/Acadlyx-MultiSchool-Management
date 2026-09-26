@@ -4,8 +4,9 @@ Acadlyx is a multi-tenant, white-label **School Operating Platform**. One shared
 shared web/mobile codebases serve many independent schools, and each school keeps its own
 isolated data, users, configuration, branding, domain and mobile app.
 
-> **Current status:** Phase 1 (Project Foundation & Infrastructure) is complete. No school
-> business functionality exists yet. See [docs/PHASE_STATUS.md](docs/PHASE_STATUS.md).
+> **Current status:** Phase 2 (Multi-Tenancy & Platform Super Admin) is implemented and awaiting
+> review. Schools can be created and configured as isolated tenants. No school business modules
+> (students, attendance, fees, …) exist yet. See [docs/PHASE_STATUS.md](docs/PHASE_STATUS.md).
 > The planning blueprint (the "SchoolOS V1 Master Blueprint") is the source of truth.
 > Wherever it says SchoolOS, read Acadlyx.
 
@@ -24,13 +25,15 @@ isolated data, users, configuration, branding, domain and mobile app.
                     web-ui · mobile-ui · permissions · tenant-config
 ```
 
-Details: [docs/architecture/README.md](docs/architecture/README.md).
+Details: [docs/architecture/README.md](docs/architecture/README.md) and
+[docs/architecture/MULTI_TENANCY.md](docs/architecture/MULTI_TENANCY.md) (tenant model, resolution,
+context, RLS, isolation tests).
 
 ## Workspace structure
 
 ```
 apps/
-  backend/          NestJS API under /api/v1 (config, database, cache, queue, health, logging, security, common)
+  backend/          NestJS API under /api/v1 (platform, tenancy, tenant-api, config, database, cache, queue, health, logging, security, common)
   platform-admin/   Next.js internal Acadlyx team portal        (port 4001)
   school-admin/     Next.js white-label school portal           (port 4002)
   mobile/           Expo React Native app                       (Metro 8081)
@@ -78,8 +81,8 @@ brew services start postgresql@17
 brew services start redis
 ```
 
-For the one-time database and role creation, see
-[local setup](docs/development/local-setup.md). If you use Docker, an optional
+For the one-time creation of the two database roles (`acadlyx` owner/platform, `acadlyx_app`
+restricted tenant role) and the database, see [local setup](docs/development/local-setup.md). If you use Docker, an optional
 `infrastructure/docker/docker-compose.yml` is also available.
 
 ## Prisma
@@ -90,9 +93,10 @@ pnpm db:migrate          # create + apply a dev migration (prisma migrate dev)
 pnpm db:migrate:deploy   # apply committed migrations (staging/production)
 pnpm db:status           # migration status
 pnpm db:reset            # DESTRUCTIVE: drops and recreates the dev database
+pnpm db:seed             # demo tenants SCHOOL_A/B/C (idempotent; refuses in production)
 ```
 
-The Phase 1 schema has no models, so no migrations exist yet. See
+Migrations: `phase_2_multi_tenancy` (tenant tables, constraints, Row Level Security). See
 [docs/database/README.md](docs/database/README.md).
 
 ## Running
@@ -107,17 +111,41 @@ pnpm dev:mobile           # Expo Metro on :8081 (press i / a, or scan with Expo 
 
 Run `pnpm build:packages` once before starting a single app on its own.
 
+### Trying multi-tenancy locally
+
+`*.localhost` host names resolve to 127.0.0.1 in browsers and curl, so no hosts-file edits are
+needed. After `pnpm db:seed`:
+
+| URL                            | Shows                                              |
+| ------------------------------ | -------------------------------------------------- |
+| http://localhost:4001          | Platform Admin: dashboard and school management    |
+| http://school-a.localhost:4002 | School Admin branded as School A (blue)            |
+| http://school-b.localhost:4002 | Same codebase branded as School B (green)          |
+| http://school-c.localhost:4002 | “School unavailable”, HTTP 403 (School C is DRAFT) |
+| http://unknown.localhost:4002  | “School not found”, HTTP 404                       |
+
+```bash
+curl -H 'Host: school-a.localhost' http://localhost:4000/api/v1/tenant/bootstrap
+curl -H 'X-Acadlyx-Tenant-Key: SCHOOL_B' http://localhost:4000/api/v1/tenant/bootstrap
+```
+
+Mobile: set `EXPO_PUBLIC_TENANT_KEY=SCHOOL_A` in `apps/mobile/.env` to see School A branding.
+
+> Platform Admin has **no authentication until Phase 3**. It is a development/internal surface
+> and must not be exposed publicly.
+
 ## Quality
 
 ```bash
 pnpm lint            # ESLint (zero warnings allowed)
 pnpm typecheck       # strict TypeScript across all workspaces
-pnpm test            # Vitest: packages + backend unit + backend e2e (needs PostgreSQL + Redis)
+pnpm test            # Vitest: packages + backend unit + e2e + tenant isolation/RLS (needs PostgreSQL + Redis, migrated)
 pnpm build           # packages, backend, both web apps
 pnpm validate:mobile # tsc + expo dependency check + iOS/Android bundle export
+pnpm test:e2e:school-admin # School Admin HTTP status codes (needs API on :4000 and `next start` on :4002)
 pnpm format          # Prettier
 ```
 
 CI (`.github/workflows/ci.yml`) runs the same gates on every push to `main` and on every pull
-request: Node 22.23.2, pnpm 11.19.0, frozen install, with PostgreSQL 17 and Redis 8 services.
-It does not deploy.
+request: Node 22.23.2, pnpm 11.19.0, frozen install, PostgreSQL 17 and Redis 8 services, database
+role setup and `migrate deploy`. It does not deploy.

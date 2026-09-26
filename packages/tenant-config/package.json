@@ -2,7 +2,7 @@
   "name": "@acadlyx/tenant-config",
   "version": "0.0.0",
   "private": true,
-  "description": "Shared tenant/white-label configuration contracts (populated in Phase 2).",
+  "description": "Shared tenant lifecycle, feature registry, configuration registry and white-label contracts.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -20,9 +20,14 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src --max-warnings 0",
-    "clean": "rm -rf dist *.tsbuildinfo"
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "test": "vitest run"
   },
   "devDependencies": {
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "vitest": "4.1.11"
+  },
+  "dependencies": {
+    "@acadlyx/validation": "workspace:*"
   }
 }

@@ -26,7 +26,8 @@
   "dependencies": {
     "@acadlyx/constants": "workspace:*",
     "@acadlyx/types": "workspace:*",
-    "@acadlyx/utils": "workspace:*"
+    "@acadlyx/utils": "workspace:*",
+    "@acadlyx/tenant-config": "workspace:*"
   },
   "devDependencies": {
     "typescript": "6.0.3",

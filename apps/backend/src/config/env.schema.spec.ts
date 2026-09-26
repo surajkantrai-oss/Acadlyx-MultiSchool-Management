@@ -3,6 +3,7 @@ import { validateEnv } from './env.schema.js';
 
 const valid = {
   DATABASE_URL: 'postgresql://user:s3cret-value@localhost:5432/acadlyx',
+  DATABASE_APP_URL: 'postgresql://app_user:other@localhost:5432/acadlyx',
   REDIS_URL: 'redis://localhost:6379/0',
   API_PUBLIC_URL: 'http://localhost:4000',
 };
@@ -33,6 +34,12 @@ describe('validateEnv', () => {
     expect(() =>
       validateEnv({ DATABASE_URL: 'mysql://x', CORS_ORIGINS: '*', NODE_ENV: 'prod' }),
     ).toThrow(/DATABASE_URL[\s\S]*REDIS_URL|REDIS_URL[\s\S]*DATABASE_URL/);
+  });
+
+  it('rejects a tenant database URL that reuses the platform role', () => {
+    expect(() =>
+      validateEnv({ ...valid, DATABASE_APP_URL: 'postgresql://user:x@localhost:5432/acadlyx' }),
+    ).toThrow(/DATABASE_APP_URL/);
   });
 
   it('never echoes configuration values in the error', () => {

@@ -5,6 +5,8 @@ import { z } from 'zod';
 
 export { z };
 
+export * from './tenant.js';
+
 export const appEnvironmentSchema = z.enum(['development', 'test', 'staging', 'production']);
 
 export const logLevelSchema = z.enum([

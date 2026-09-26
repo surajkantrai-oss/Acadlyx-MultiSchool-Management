@@ -1,9 +1,9 @@
-import { Global, Module } from '@nestjs/common';
-import { PrismaService } from './prisma.service.js';
+import { Module } from '@nestjs/common';
+import { PlatformPrismaService } from './platform-prisma.service.js';
 
-@Global()
+/** Platform database access. Deliberately NOT global: import it only where platform scope is intended. */
 @Module({
-  providers: [PrismaService],
-  exports: [PrismaService],
+  providers: [PlatformPrismaService],
+  exports: [PlatformPrismaService],
 })
 export class DatabaseModule {}

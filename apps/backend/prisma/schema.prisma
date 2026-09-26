@@ -1,8 +1,9 @@
 // Acadlyx database schema.
 //
-// Phase 1 intentionally defines no models. Tenant-aware business models
-// (Tenant, TenantDomain, ...) are introduced in Phase 2. Every tenant-owned
-// table must carry tenant_id — see docs/database/README.md.
+// Conventions: Prisma models are PascalCase/camelCase; database tables and columns are
+// snake_case via @@map/@map. Primary keys are UUID v7. Every tenant-owned table carries
+// tenant_id and is protected by PostgreSQL Row Level Security (see the
+// phase_2_multi_tenancy migration and docs/architecture/MULTI_TENANCY.md).
 
 generator client {
   provider     = "prisma-client"
@@ -12,4 +13,123 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+/// Lifecycle rules live in @acadlyx/tenant-config (lifecycle.ts). ARCHIVED is terminal.
+enum TenantStatus {
+  DRAFT
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+  ARCHIVED
+
+  @@map("tenant_status")
+}
+
+enum TenantDomainType {
+  PLATFORM_SUBDOMAIN
+  CUSTOM
+  ADMIN
+
+  @@map("tenant_domain_type")
+}
+
+/// One paying school/customer organisation. Never hard-deleted through normal operations.
+model Tenant {
+  id               String       @id @default(uuid(7)) @db.Uuid
+  /// Immutable machine key, e.g. WORLD_WAY.
+  key              String       @unique @db.VarChar(40)
+  /// URL slug; immutable once the tenant has been activated.
+  slug             String       @unique @db.VarChar(63)
+  displayName      String       @map("display_name") @db.VarChar(120)
+  legalName        String?      @map("legal_name") @db.VarChar(200)
+  status           TenantStatus @default(DRAFT)
+  firstActivatedAt DateTime?    @map("first_activated_at") @db.Timestamptz(3)
+  /// Set only on transition to ARCHIVED.
+  archivedAt       DateTime?    @map("archived_at") @db.Timestamptz(3)
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  domains        TenantDomain[]
+  branding       TenantBranding?
+  features       TenantFeature[]
+  configurations TenantConfiguration[]
+
+  @@index([status])
+  @@map("tenants")
+}
+
+model TenantDomain {
+  id         String           @id @default(uuid(7)) @db.Uuid
+  tenantId   String           @map("tenant_id") @db.Uuid
+  /// Normalised lower-case host name, no scheme/port/path. Globally unique.
+  domain     String           @unique @db.VarChar(253)
+  type       TenantDomainType
+  /// At most one primary per (tenant, type) — enforced by a partial unique index.
+  isPrimary  Boolean          @default(false) @map("is_primary")
+  /// Set manually by Platform Admin until DNS verification automation exists.
+  verifiedAt DateTime?        @map("verified_at") @db.Timestamptz(3)
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@map("tenant_domains")
+}
+
+model TenantBranding {
+  id                 String   @id @default(uuid(7)) @db.Uuid
+  tenantId           String   @unique @map("tenant_id") @db.Uuid
+  schoolName         String   @map("school_name") @db.VarChar(120)
+  shortName          String?  @map("short_name") @db.VarChar(40)
+  logoUrl            String?  @map("logo_url") @db.VarChar(2048)
+  faviconUrl         String?  @map("favicon_url") @db.VarChar(2048)
+  primaryColor       String   @map("primary_color") @db.Char(7)
+  secondaryColor     String?  @map("secondary_color") @db.Char(7)
+  accentColor        String?  @map("accent_color") @db.Char(7)
+  backgroundImageUrl String?  @map("background_image_url") @db.VarChar(2048)
+  loginImageUrl      String?  @map("login_image_url") @db.VarChar(2048)
+  supportEmail       String?  @map("support_email") @db.VarChar(254)
+  supportPhone       String?  @map("support_phone") @db.VarChar(20)
+  websiteUrl         String?  @map("website_url") @db.VarChar(2048)
+  footerText         String?  @map("footer_text") @db.VarChar(200)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@map("tenant_brandings")
+}
+
+/// One row per (tenant, feature) that has been explicitly configured. Keys are validated
+/// against FEATURE_REGISTRY in @acadlyx/tenant-config; a missing row means disabled.
+model TenantFeature {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  featureKey String   @map("feature_key") @db.VarChar(64)
+  enabled    Boolean  @default(false)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, featureKey])
+  @@map("tenant_features")
+}
+
+/// Namespaced configuration overrides. Keys and value schemas are defined by
+/// CONFIGURATION_REGISTRY in @acadlyx/tenant-config; a missing row means "use default".
+model TenantConfiguration {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  key       String   @db.VarChar(100)
+  value     Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, key])
+  @@map("tenant_configurations")
 }

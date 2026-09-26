@@ -2,7 +2,7 @@
   "name": "@acadlyx/backend",
   "version": "0.1.0",
   "private": true,
-  "description": "Acadlyx core backend — NestJS modular monolith",
+  "description": "Acadlyx core backend \u2014 NestJS modular monolith",
   "type": "module",
   "scripts": {
     "prebuild": "pnpm prisma:generate",
@@ -20,10 +20,12 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:status": "prisma migrate status",
     "db:reset": "prisma migrate reset",
-    "clean": "rm -rf dist src/generated *.tsbuildinfo"
+    "clean": "rm -rf dist src/generated *.tsbuildinfo",
+    "db:seed": "nest build && node --env-file-if-exists=.env dist/database/seed.js"
   },
   "dependencies": {
     "@acadlyx/constants": "workspace:*",
+    "@acadlyx/tenant-config": "workspace:*",
     "@acadlyx/types": "workspace:*",
     "@acadlyx/validation": "workspace:*",
     "@nestjs/bullmq": "12.0.0",
@@ -49,16 +51,18 @@
     "@nestjs/cli": "12.0.7",
     "@nestjs/schematics": "12.0.5",
     "@nestjs/testing": "12.1.0",
+    "@swc/core": "1.16.2",
     "@types/express": "5.0.6",
     "@types/node": "22.20.4",
+    "@types/pg": "8.23.1",
     "@types/supertest": "7.2.1",
     "dotenv": "18.0.4",
+    "pg": "8.23.0",
     "pino-pretty": "13.1.3",
     "prisma": "7.10.0",
     "supertest": "7.3.0",
     "typescript": "6.0.3",
     "unplugin-swc": "2.0.0",
-    "@swc/core": "1.16.2",
     "vitest": "4.1.11"
   }
 }

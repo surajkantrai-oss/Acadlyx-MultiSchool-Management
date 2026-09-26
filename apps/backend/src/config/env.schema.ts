@@ -8,32 +8,48 @@ import {
 
 const booleanishInt = z.coerce.number().int().min(0).max(10);
 
-export const envSchema = z.object({
-  NODE_ENV: appEnvironmentSchema.default('development'),
-  PORT: portSchema.default(4000),
-  DATABASE_URL: z
-    .string()
-    .min(1)
-    .refine((value) => /^postgres(ql)?:\/\//.test(value), {
-      message: 'DATABASE_URL must be a postgresql:// connection string',
-    }),
-  REDIS_URL: z
-    .string()
-    .min(1)
-    .refine((value) => /^rediss?:\/\//.test(value), {
-      message: 'REDIS_URL must be a redis:// or rediss:// URL',
-    }),
-  CORS_ORIGINS: originListSchema.default([]),
-  API_PUBLIC_URL: z.url({ protocol: /^https?$/ }),
-  LOG_LEVEL: logLevelSchema.default('info'),
-  BODY_LIMIT: z
-    .string()
-    .regex(/^\d+(b|kb|mb)$/i, 'BODY_LIMIT must look like 100kb or 1mb')
-    .default('1mb'),
-  RATE_LIMIT_TTL_MS: z.coerce.number().int().positive().default(60_000),
-  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
-  TRUST_PROXY: booleanishInt.default(0),
-});
+export const envSchema = z
+  .object({
+    NODE_ENV: appEnvironmentSchema.default('development'),
+    PORT: portSchema.default(4000),
+    DATABASE_URL: z
+      .string()
+      .min(1)
+      .refine((value) => /^postgres(ql)?:\/\//.test(value), {
+        message: 'DATABASE_URL must be a postgresql:// connection string',
+      }),
+    /** Restricted role for tenant-scoped queries (RLS enforced). Must differ from DATABASE_URL's role. */
+    DATABASE_APP_URL: z
+      .string()
+      .min(1)
+      .refine((value) => /^postgres(ql)?:\/\//.test(value), {
+        message: 'DATABASE_APP_URL must be a postgresql:// connection string',
+      }),
+    REDIS_URL: z
+      .string()
+      .min(1)
+      .refine((value) => /^rediss?:\/\//.test(value), {
+        message: 'REDIS_URL must be a redis:// or rediss:// URL',
+      }),
+    CORS_ORIGINS: originListSchema.default([]),
+    API_PUBLIC_URL: z.url({ protocol: /^https?$/ }),
+    LOG_LEVEL: logLevelSchema.default('info'),
+    BODY_LIMIT: z
+      .string()
+      .regex(/^\d+(b|kb|mb)$/i, 'BODY_LIMIT must look like 100kb or 1mb')
+      .default('1mb'),
+    RATE_LIMIT_TTL_MS: z.coerce.number().int().positive().default(60_000),
+    RATE_LIMIT_MAX: z.coerce.number().int().positive().default(300),
+    TRUST_PROXY: booleanishInt.default(0),
+  })
+  .refine(
+    // The tenant path must never run as the platform/owner role, or RLS would be bypassed.
+    (env) => URL.parse(env.DATABASE_URL)?.username !== URL.parse(env.DATABASE_APP_URL)?.username,
+    {
+      path: ['DATABASE_APP_URL'],
+      message: 'DATABASE_APP_URL must use a different (restricted) role than DATABASE_URL',
+    },
+  );
 
 export type Env = z.infer<typeof envSchema>;
 

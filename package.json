@@ -2,7 +2,7 @@
   "name": "acadlyx",
   "version": "0.1.0",
   "private": true,
-  "description": "Acadlyx — multi-tenant, white-label School Operating Platform",
+  "description": "Acadlyx \u2014 multi-tenant, white-label School Operating Platform",
   "packageManager": "pnpm@11.19.0",
   "engines": {
     "node": ">=22.13.0 <23",
@@ -30,7 +30,9 @@
     "db:migrate:deploy": "pnpm --filter @acadlyx/backend db:migrate:deploy",
     "db:status": "pnpm --filter @acadlyx/backend db:status",
     "db:reset": "pnpm --filter @acadlyx/backend db:reset",
-    "clean": "pnpm -r --if-present clean"
+    "clean": "pnpm -r --if-present clean",
+    "db:seed": "pnpm build:packages && pnpm --filter @acadlyx/backend db:seed",
+    "test:e2e:school-admin": "pnpm --filter @acadlyx/school-admin test:e2e"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",

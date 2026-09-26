@@ -1,7 +1,8 @@
 /**
- * Shared tenant / white-label configuration contracts.
- *
- * Intentionally empty in Phase 1. Tenant keys, branding, theme tokens and feature flags
- * are defined in Phase 2 — Multi-Tenancy & Platform Super Admin.
+ * Shared tenant / white-label contracts: lifecycle rules, feature registry, configuration
+ * registry and API types. Framework-agnostic; used by backend, web apps and mobile.
  */
-export {};
+export * from './configuration.js';
+export * from './contracts.js';
+export * from './features.js';
+export * from './lifecycle.js';
