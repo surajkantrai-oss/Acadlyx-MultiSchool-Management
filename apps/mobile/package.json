@@ -1,0 +1,31 @@
+{
+  "name": "@acadlyx/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Acadlyx mobile app (React Native + Expo). Branded per-tenant builds arrive in a later phase.",
+  "main": "index.ts",
+  "scripts": {
+    "dev": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "validate": "tsc --noEmit && expo install --check && expo config --type public > /dev/null && expo export --platform ios --platform android --output-dir .expo/export-check",
+    "clean": "rm -rf .expo"
+  },
+  "dependencies": {
+    "@acadlyx/api-client": "workspace:*",
+    "@acadlyx/constants": "workspace:*",
+    "@acadlyx/mobile-ui": "workspace:*",
+    "expo": "~57.0.25",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.3"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.18",
+    "eslint": "9.39.5",
+    "eslint-config-expo": "57.0.2",
+    "typescript": "6.0.3"
+  }
+}

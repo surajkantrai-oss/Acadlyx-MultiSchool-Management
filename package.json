@@ -1,0 +1,44 @@
+{
+  "name": "acadlyx",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Acadlyx — multi-tenant, white-label School Operating Platform",
+  "packageManager": "pnpm@11.19.0",
+  "engines": {
+    "node": ">=22.13.0 <23",
+    "pnpm": ">=11.19.0"
+  },
+  "scripts": {
+    "build:packages": "pnpm --filter \"./packages/**\" -r build",
+    "dev": "pnpm build:packages && pnpm --parallel --filter @acadlyx/backend --filter @acadlyx/platform-admin --filter @acadlyx/school-admin dev",
+    "dev:backend": "pnpm --filter @acadlyx/backend dev",
+    "dev:platform-admin": "pnpm --filter @acadlyx/platform-admin dev",
+    "dev:school-admin": "pnpm --filter @acadlyx/school-admin dev",
+    "dev:mobile": "pnpm --filter @acadlyx/mobile dev",
+    "build": "pnpm -r --if-present build",
+    "build:backend": "pnpm build:packages && pnpm --filter @acadlyx/backend build",
+    "build:platform-admin": "pnpm build:packages && pnpm --filter @acadlyx/platform-admin build",
+    "build:school-admin": "pnpm build:packages && pnpm --filter @acadlyx/school-admin build",
+    "validate:mobile": "pnpm build:packages && pnpm --filter @acadlyx/mobile validate",
+    "lint": "pnpm -r --if-present lint",
+    "typecheck": "pnpm build:packages && pnpm -r --if-present typecheck",
+    "test": "pnpm build:packages && pnpm -r --if-present test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prisma:generate": "pnpm --filter @acadlyx/backend prisma:generate",
+    "db:migrate": "pnpm --filter @acadlyx/backend db:migrate",
+    "db:migrate:deploy": "pnpm --filter @acadlyx/backend db:migrate:deploy",
+    "db:status": "pnpm --filter @acadlyx/backend db:status",
+    "db:reset": "pnpm --filter @acadlyx/backend db:reset",
+    "clean": "pnpm -r --if-present clean"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "eslint": "9.39.5",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.12.0",
+    "prettier": "3.9.9",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.70.1"
+  }
+}

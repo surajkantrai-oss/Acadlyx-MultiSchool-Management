@@ -1,0 +1,33 @@
+{
+  "name": "@acadlyx/web-ui",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Generic React UI primitives shared by Platform Admin and School Admin.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src --max-warnings 0",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "peerDependencies": {
+    "react": "^19.2.0"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "react": "19.2.3",
+    "@types/react": "19.2.18"
+  }
+}

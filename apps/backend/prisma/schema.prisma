@@ -1,0 +1,15 @@
+// Acadlyx database schema.
+//
+// Phase 1 intentionally defines no models. Tenant-aware business models
+// (Tenant, TenantDomain, ...) are introduced in Phase 2. Every tenant-owned
+// table must carry tenant_id — see docs/database/README.md.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}

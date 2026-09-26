@@ -1,0 +1,37 @@
+# OPTIONAL local dependencies for developers who use Docker.
+# The primary documented setup is native Homebrew PostgreSQL + Redis
+# (docs/development/local-setup.md). Stop native services first to avoid port clashes.
+#
+#   docker compose -f infrastructure/docker/docker-compose.yml up -d
+#
+name: acadlyx
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: acadlyx
+      POSTGRES_USER: acadlyx
+      # Local-only development password. Match it in apps/backend/.env.
+      POSTGRES_PASSWORD: ${ACADLYX_DEV_DB_PASSWORD:-acadlyx_local_dev}
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - acadlyx_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U acadlyx -d acadlyx']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    ports:
+      - '127.0.0.1:6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  acadlyx_postgres:

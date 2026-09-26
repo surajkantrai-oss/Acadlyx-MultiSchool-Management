@@ -1,0 +1,11 @@
+node_modules
+dist
+.next
+.expo
+coverage
+pnpm-lock.yaml
+apps/backend/src/generated
+apps/backend/prisma/migrations/**/migration.sql
+*.tsbuildinfo
+next-env.d.ts
+expo-env.d.ts

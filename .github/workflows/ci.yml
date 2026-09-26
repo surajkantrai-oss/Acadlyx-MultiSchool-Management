@@ -1,0 +1,82 @@
+# Acadlyx quality gate. Verification only — this workflow never deploys anything.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-gate:
+    name: Lint · Typecheck · Test · Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: acadlyx
+          POSTGRES_USER: acadlyx
+          # CI-only throwaway database password; not a real secret.
+          POSTGRES_PASSWORD: acadlyx_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U acadlyx -d acadlyx"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:8-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+
+    # Backend configuration for e2e tests and Prisma (mirrors apps/backend/.env.example).
+    env:
+      DATABASE_URL: postgresql://acadlyx:acadlyx_ci@localhost:5432/acadlyx?schema=public
+      REDIS_URL: redis://localhost:6379/0
+      CORS_ORIGINS: http://localhost:4001,http://localhost:4002
+      API_PUBLIC_URL: http://localhost:4000
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:4000/api/v1
+      EXPO_PUBLIC_API_BASE_URL: http://localhost:4000/api/v1
+      NEXT_TELEMETRY_DISABLED: '1'
+      CI: 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # pnpm version comes from package.json "packageManager" (pnpm@11.19.0).
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test (packages + backend unit + backend e2e)
+        run: pnpm test
+
+      - name: Build (packages, backend, web apps)
+        run: pnpm build
+
+      - name: Validate mobile (tsc, expo dependency check, iOS/Android bundle export)
+        run: pnpm validate:mobile

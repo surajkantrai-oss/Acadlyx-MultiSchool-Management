@@ -1,0 +1,16 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Dependencies whose install scripts are trusted (native binaries / engine downloads).
+allowBuilds:
+  '@prisma/engines': true
+  '@swc/core': true
+  msgpackr-extract: true
+  prisma: true
+  unrs-resolver: true
+
+# Pinned versions published within pnpm's minimum release-age window.
+minimumReleaseAgeExclude:
+  - bullmq@6.3.9
+  - dotenv@18.0.4
