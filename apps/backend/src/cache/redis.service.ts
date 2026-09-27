@@ -53,9 +53,28 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
+    // quit() resolves on Redis' OK reply; the socket closes (status 'end') slightly later.
+    // Wait for the real close — bounded, so an unreachable Redis never stalls shutdown.
+    const ended = new Promise<void>((resolve) => {
+      this.client.once('end', () => {
+        resolve();
+      });
+    });
     await this.client.quit().catch(() => {
       this.client.disconnect();
     });
+    const status = (): string => this.client.status; // re-read (no stale narrowing)
+    if (status() !== 'end') {
+      let timer: NodeJS.Timeout | undefined;
+      await Promise.race([
+        ended,
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, 2_000);
+        }),
+      ]);
+      clearTimeout(timer);
+      if (status() !== 'end') this.client.disconnect();
+    }
     this.logger.log('Redis connection closed');
   }
 }
