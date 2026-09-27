@@ -1,7 +1,7 @@
 import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { AppConfigService } from '../config/app-config.service.js';
-import { PrismaClient } from '../generated/prisma/client.js';
+import { type Prisma, PrismaClient } from '../generated/prisma/client.js';
 import { TenantContext } from './tenant-context.js';
 import { scopeQueryArgs } from './tenant-scope.js';
 
@@ -52,6 +52,15 @@ export class TenantPrismaService implements OnModuleDestroy {
       await tx.$queryRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
       return fn(tx);
     });
+  }
+
+  /**
+   * Same as run(), typed as a plain Prisma transaction client so scope-agnostic security code
+   * can share one implementation with the platform path. The tenant-scoping extension and RLS
+   * still apply at runtime — the cast only widens the static type, not the behaviour.
+   */
+  runWith<T>(fn: (db: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+    return this.run((tx) => fn(tx as unknown as Prisma.TransactionClient));
   }
 
   async isHealthy(): Promise<boolean> {

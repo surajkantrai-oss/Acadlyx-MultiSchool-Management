@@ -74,3 +74,52 @@ describe('platform and tenant helpers', () => {
     expect(init?.headers).toMatchObject({ 'x-acadlyx-tenant-key': 'SCHOOL_A' });
   });
 });
+
+describe('web BFF helpers', () => {
+  it('accepts only same-origin mutations carrying the CSRF header', async () => {
+    const { isTrustedMutation } = await import('./web-auth.js');
+    const base = {
+      method: 'POST',
+      host: 'school-a.localhost:4002',
+      protocol: 'http' as const,
+      referer: null,
+    };
+    expect(
+      isTrustedMutation({ ...base, origin: 'http://school-a.localhost:4002', csrfHeader: '1' }),
+    ).toBe(true);
+    expect(
+      isTrustedMutation({ ...base, origin: 'http://school-b.localhost:4002', csrfHeader: '1' }),
+    ).toBe(false);
+    expect(isTrustedMutation({ ...base, origin: 'https://evil.example', csrfHeader: '1' })).toBe(
+      false,
+    );
+    expect(
+      isTrustedMutation({ ...base, origin: 'http://school-a.localhost:4002', csrfHeader: null }),
+    ).toBe(false);
+    expect(isTrustedMutation({ ...base, origin: null, csrfHeader: '1' })).toBe(false);
+    expect(
+      isTrustedMutation({
+        ...base,
+        origin: null,
+        referer: 'http://school-a.localhost:4002/x',
+        csrfHeader: '1',
+      }),
+    ).toBe(true);
+    expect(isTrustedMutation({ ...base, method: 'GET', origin: null, csrfHeader: null })).toBe(
+      true,
+    );
+  });
+
+  it('peeks at JWT expiry and applies __Host- names only when secure', async () => {
+    const { cookieName, jwtExpiresAt } = await import('./web-auth.js');
+    const payload = btoa(JSON.stringify({ exp: 1_900_000_000 }))
+      .replace(/=+$/, '')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_');
+    const token = `x.${payload}.y`;
+    expect(jwtExpiresAt(token)).toBe(1_900_000_000_000);
+    expect(jwtExpiresAt('garbage')).toBeNull();
+    expect(cookieName('acx_rt', true)).toBe('__Host-acx_rt');
+    expect(cookieName('acx_rt', false)).toBe('acx_rt');
+  });
+});

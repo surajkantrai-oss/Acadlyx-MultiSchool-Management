@@ -2,6 +2,7 @@ import { HEALTH_PATH } from '@acadlyx/constants';
 import type { HealthResponse } from '@acadlyx/types';
 import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
 import { SkipThrottle } from '@nestjs/throttler';
+import { Public } from '../auth/core/access.decorators.js';
 import type { Response } from 'express';
 import { PlatformPrismaService } from '../database/platform-prisma.service.js';
 import { RedisService } from '../cache/redis.service.js';
@@ -19,6 +20,7 @@ function withTimeout(check: Promise<boolean>): Promise<boolean> {
   ]);
 }
 
+@Public()
 @SkipThrottle()
 @Controller(HEALTH_PATH)
 export class HealthController {

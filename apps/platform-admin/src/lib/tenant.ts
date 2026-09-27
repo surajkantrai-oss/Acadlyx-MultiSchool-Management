@@ -2,7 +2,7 @@ import { ApiError } from '@acadlyx/api-client';
 import type { TenantDetail } from '@acadlyx/tenant-config';
 import { notFound } from 'next/navigation';
 import { cache } from 'react';
-import { api } from './api';
+import { serverApi } from './server/session';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -10,7 +10,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const loadTenant = cache(async (tenantId: string): Promise<TenantDetail> => {
   if (!UUID.test(tenantId)) notFound();
   try {
-    return await api.platform.getTenant(tenantId);
+    return await (await serverApi()).platform.getTenant(tenantId);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) notFound();
     throw error;

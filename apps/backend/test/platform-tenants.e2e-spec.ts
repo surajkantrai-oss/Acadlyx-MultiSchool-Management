@@ -1,9 +1,19 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PlatformPrismaService } from '../src/database/platform-prisma.service.js';
 import { createTestApp } from './helpers/app.js';
 import { purgeTenants } from './helpers/tenant-fixtures.js';
+import {
+  call,
+  createPlatformUser,
+  platformLogin,
+  purgePlatformUsers,
+  resetRateLimits,
+  syncRbac,
+} from './helpers/auth.js';
+
+const ADMIN_EMAIL = 'plt-admin@acadlyx.test';
+const ADMIN_PASSWORD = 'Plt-admin-pass-2026!';
 
 const PREFIX = 'PLT';
 const BASE = '/api/v1/platform/tenants';
@@ -13,16 +23,24 @@ describe('Platform tenant management API (e2e)', () => {
   let prisma: PlatformPrismaService;
   let id: string;
 
-  const api = () => request(app.getHttpServer());
+  let token: string;
+  // Phase 3: platform APIs require an authenticated Platform Admin (password + TOTP MFA).
+  const api = () => call(app, { token });
 
   beforeAll(async () => {
     app = await createTestApp();
     prisma = app.get(PlatformPrismaService);
+    await resetRateLimits(app);
+    await syncRbac(app);
     await purgeTenants(prisma, PREFIX);
+    await purgePlatformUsers(app, 'plt-admin@');
+    await createPlatformUser(app, { email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
+    token = (await platformLogin(app, ADMIN_EMAIL, ADMIN_PASSWORD)).tokens.accessToken;
   });
 
   afterAll(async () => {
     await purgeTenants(prisma, PREFIX);
+    await purgePlatformUsers(app, 'plt-admin@');
     await app.close();
   });
 

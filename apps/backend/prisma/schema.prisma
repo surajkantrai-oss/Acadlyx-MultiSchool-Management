@@ -54,6 +54,8 @@ model Tenant {
   branding       TenantBranding?
   features       TenantFeature[]
   configurations TenantConfiguration[]
+  users          User[]
+  auditLogs      AuditLog[]
 
   @@index([status])
   @@map("tenants")
@@ -132,4 +134,411 @@ model TenantConfiguration {
 
   @@unique([tenantId, key])
   @@map("tenant_configurations")
+}
+
+// =============================================================================================
+// Phase 3 — identity, authentication, RBAC, sessions, MFA, audit.
+//
+// Scopes (blueprint §10.1/§10.2): PlatformUser (Acadlyx staff, no tenant) and User (exactly one
+// tenant). Shared security tables (sessions, refresh tokens, devices, MFA) carry a nullable
+// tenant_id: platform rows have tenant_id NULL and are therefore invisible to the RLS-restricted
+// tenant role. Composite (id, tenant_id) foreign keys make cross-tenant links impossible.
+// =============================================================================================
+
+enum AccountStatus {
+  PENDING_ACTIVATION
+  ACTIVE
+  SUSPENDED
+  DISABLED
+
+  @@map("account_status")
+}
+
+enum AuthScope {
+  PLATFORM
+  TENANT
+
+  @@map("auth_scope")
+}
+
+enum CredentialType {
+  PASSWORD
+  PIN
+
+  @@map("credential_type")
+}
+
+enum LoginIdKind {
+  STUDENT_ID
+  EMPLOYEE_ID
+
+  @@map("login_id_kind")
+}
+
+enum DevicePlatform {
+  IOS
+  ANDROID
+  WEB
+
+  @@map("device_platform")
+}
+
+enum OtpPurpose {
+  ACCOUNT_ACTIVATION
+  ACCOUNT_RECOVERY
+  PHONE_CHANGE
+  EMAIL_CHANGE
+  NEW_DEVICE
+
+  @@map("otp_purpose")
+}
+
+enum OtpChannel {
+  SMS
+  EMAIL
+  ADMIN_ISSUED
+
+  @@map("otp_channel")
+}
+
+enum MfaMethodType {
+  TOTP
+  WEBAUTHN
+
+  @@map("mfa_method_type")
+}
+
+/// Code-registry-synced catalogue (see @acadlyx/permissions). Not tenant-owned.
+model Role {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  key       String    @unique @db.VarChar(64)
+  name      String    @db.VarChar(100)
+  scope     AuthScope
+  isSystem  Boolean   @default(true) @map("is_system")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  permissions   RolePermission[]
+  userRoles     UserRole[]
+  platformUsers PlatformUserRole[]
+
+  @@unique([id, scope])
+  @@map("roles")
+}
+
+model Permission {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  key         String    @unique @db.VarChar(100)
+  scope       AuthScope
+  description String    @db.VarChar(255)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  roles RolePermission[]
+
+  @@unique([id, scope])
+  @@map("permissions")
+}
+
+/// Role and permission must share a scope (composite FKs on (id, scope)).
+model RolePermission {
+  roleId       String    @map("role_id") @db.Uuid
+  permissionId String    @map("permission_id") @db.Uuid
+  scope        AuthScope
+
+  role       Role       @relation(fields: [roleId, scope], references: [id, scope], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId, scope], references: [id, scope], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+/// Acadlyx staff. Created only via the bootstrap CLI. Platform-path (owner role) only.
+model PlatformUser {
+  id                     String        @id @default(uuid(7)) @db.Uuid
+  email                  String        @unique @db.VarChar(254)
+  displayName            String        @map("display_name") @db.VarChar(120)
+  status                 AccountStatus @default(PENDING_ACTIVATION)
+  passwordHash           String?       @map("password_hash") @db.VarChar(255)
+  credentialUpdatedAt    DateTime?     @map("credential_updated_at") @db.Timestamptz(3)
+  failedLoginCount       Int           @default(0) @map("failed_login_count")
+  lockoutCount           Int           @default(0) @map("lockout_count")
+  lockoutWindowStartedAt DateTime?     @map("lockout_window_started_at") @db.Timestamptz(3)
+  lockedUntil            DateTime?     @map("locked_until") @db.Timestamptz(3)
+  lastLoginAt            DateTime?     @map("last_login_at") @db.Timestamptz(3)
+  createdAt              DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  roles         PlatformUserRole[]
+  sessions      Session[]
+  devices       UserDevice[]
+  mfaMethods    MfaMethod[]
+  recoveryCodes MfaRecoveryCode[]
+
+  @@map("platform_users")
+}
+
+model PlatformUserRole {
+  platformUserId String    @map("platform_user_id") @db.Uuid
+  roleId         String    @map("role_id") @db.Uuid
+  /// Always PLATFORM — enforced by CHECK and the (role_id, role_scope) FK.
+  roleScope      AuthScope @default(PLATFORM) @map("role_scope")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  platformUser PlatformUser @relation(fields: [platformUserId], references: [id], onDelete: Cascade)
+  role         Role         @relation(fields: [roleId, roleScope], references: [id, scope], onDelete: Restrict)
+
+  @@id([platformUserId, roleId])
+  @@map("platform_user_roles")
+}
+
+/// School identity. Belongs to exactly one tenant; identifiers are unique per tenant.
+model User {
+  id                     String          @id @default(uuid(7)) @db.Uuid
+  tenantId               String          @map("tenant_id") @db.Uuid
+  status                 AccountStatus   @default(PENDING_ACTIVATION)
+  displayName            String          @map("display_name") @db.VarChar(120)
+  /// Lower-cased.
+  email                  String?         @db.VarChar(254)
+  /// E.164, e.g. +919876543210.
+  phone                  String?         @db.VarChar(16)
+  /// Student admission ID or staff employee ID, trimmed, case preserved (exact match).
+  loginId                String?         @map("login_id") @db.VarChar(64)
+  loginIdKind            LoginIdKind?    @map("login_id_kind")
+  emailVerifiedAt        DateTime?       @map("email_verified_at") @db.Timestamptz(3)
+  phoneVerifiedAt        DateTime?       @map("phone_verified_at") @db.Timestamptz(3)
+  credentialType         CredentialType? @map("credential_type")
+  /// Argon2id encoded hash of the password or PIN.
+  credentialHash         String?         @map("credential_hash") @db.VarChar(255)
+  credentialUpdatedAt    DateTime?       @map("credential_updated_at") @db.Timestamptz(3)
+  failedLoginCount       Int             @default(0) @map("failed_login_count")
+  lockoutCount           Int             @default(0) @map("lockout_count")
+  lockoutWindowStartedAt DateTime?       @map("lockout_window_started_at") @db.Timestamptz(3)
+  lockedUntil            DateTime?       @map("locked_until") @db.Timestamptz(3)
+  lastLoginAt            DateTime?       @map("last_login_at") @db.Timestamptz(3)
+  createdAt              DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant        Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  roles         UserRole[]
+  sessions      Session[]
+  devices       UserDevice[]
+  otpChallenges OtpChallenge[]
+  mfaMethods    MfaMethod[]
+  recoveryCodes MfaRecoveryCode[]
+
+  @@unique([id, tenantId])
+  @@index([tenantId, status])
+  @@map("users")
+}
+
+model UserRole {
+  id                      String    @id @default(uuid(7)) @db.Uuid
+  tenantId                String    @map("tenant_id") @db.Uuid
+  userId                  String    @map("user_id") @db.Uuid
+  roleId                  String    @map("role_id") @db.Uuid
+  /// Always TENANT — a tenant user can never hold a PLATFORM role (CHECK + composite FK).
+  roleScope               AuthScope @default(TENANT) @map("role_scope")
+  createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  createdByPlatformUserId String?   @map("created_by_platform_user_id") @db.Uuid
+
+  user User @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  role Role @relation(fields: [roleId, roleScope], references: [id, scope], onDelete: Restrict)
+
+  @@unique([userId, roleId])
+  @@index([tenantId])
+  @@map("user_roles")
+}
+
+model UserDevice {
+  id               String         @id @default(uuid(7)) @db.Uuid
+  scope            AuthScope
+  tenantId         String?        @map("tenant_id") @db.Uuid
+  userId           String?        @map("user_id") @db.Uuid
+  platformUserId   String?        @map("platform_user_id") @db.Uuid
+  /// SHA-256 of the app-generated installation ID (the raw ID is never stored).
+  installationHash String         @map("installation_hash") @db.Char(64)
+  platform         DevicePlatform
+  label            String?        @db.VarChar(100)
+  firstSeenAt      DateTime       @default(now()) @map("first_seen_at") @db.Timestamptz(3)
+  lastSeenAt       DateTime       @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  revokedAt        DateTime?      @map("revoked_at") @db.Timestamptz(3)
+
+  user         User?         @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  platformUser PlatformUser? @relation(fields: [platformUserId], references: [id], onDelete: Cascade)
+  sessions     Session[]
+
+  @@unique([userId, installationHash])
+  @@unique([platformUserId, installationHash])
+  @@unique([id, tenantId])
+  @@index([tenantId])
+  @@map("user_devices")
+}
+
+model Session {
+  id                String    @id @default(uuid(7)) @db.Uuid
+  scope             AuthScope
+  tenantId          String?   @map("tenant_id") @db.Uuid
+  userId            String?   @map("user_id") @db.Uuid
+  platformUserId    String?   @map("platform_user_id") @db.Uuid
+  deviceId          String?   @map("device_id") @db.Uuid
+  /// true until the MFA step completes; no refresh token exists while pending.
+  mfaPending        Boolean   @default(false) @map("mfa_pending")
+  mfaFailedAttempts Int       @default(0) @map("mfa_failed_attempts")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastActiveAt      DateTime  @default(now()) @map("last_active_at") @db.Timestamptz(3)
+  idleExpiresAt     DateTime  @map("idle_expires_at") @db.Timestamptz(3)
+  absoluteExpiresAt DateTime  @map("absolute_expires_at") @db.Timestamptz(3)
+  revokedAt         DateTime? @map("revoked_at") @db.Timestamptz(3)
+  revocationReason  String?   @map("revocation_reason") @db.VarChar(64)
+  ipAddress         String?   @map("ip_address") @db.VarChar(45)
+  userAgent         String?   @map("user_agent") @db.VarChar(255)
+
+  user                User?          @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  platformUser        PlatformUser?  @relation(fields: [platformUserId], references: [id], onDelete: Cascade)
+  device              UserDevice?    @relation(fields: [deviceId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  refreshTokens       RefreshToken[] @relation("RefreshTokenSession")
+  tenantRefreshTokens RefreshToken[] @relation("RefreshTokenTenantSession")
+
+  @@unique([id, tenantId])
+  @@index([userId, revokedAt])
+  @@index([platformUserId, revokedAt])
+  @@index([tenantId])
+  @@index([deviceId])
+  @@map("sessions")
+}
+
+/// One row per issued refresh token; the session is the rotation family.
+model RefreshToken {
+  id        String    @id @default(uuid(7)) @db.Uuid
+  sessionId String    @map("session_id") @db.Uuid
+  tenantId  String?   @map("tenant_id") @db.Uuid
+  /// SHA-256 of the 256-bit random token (raw token never stored).
+  tokenHash String    @unique @map("token_hash") @db.Char(64)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// Set when rotated; presenting a rotated token again = reuse → family revoked.
+  rotatedAt DateTime? @map("rotated_at") @db.Timestamptz(3)
+
+  /// Always resolvable (platform rows have tenant_id NULL).
+  session       Session  @relation("RefreshTokenSession", fields: [sessionId], references: [id], onDelete: Cascade)
+  /// Tenant consistency: a tenant token's tenant_id must equal its session's tenant_id.
+  tenantSession Session? @relation("RefreshTokenTenantSession", fields: [sessionId, tenantId], references: [id, tenantId], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([tenantId])
+  @@map("refresh_tokens")
+}
+
+model OtpChallenge {
+  id           String     @id @default(uuid(7)) @db.Uuid
+  tenantId     String     @map("tenant_id") @db.Uuid
+  userId       String     @map("user_id") @db.Uuid
+  purpose      OtpPurpose
+  channel      OtpChannel
+  /// Normalised phone/email the code was sent to (the new value for *_CHANGE purposes).
+  target       String     @db.VarChar(254)
+  /// HMAC-SHA256(code) with the active OTP key; `<kid>:<hex>`.
+  codeHmac     String     @map("code_hmac") @db.VarChar(100)
+  expiresAt    DateTime   @map("expires_at") @db.Timestamptz(3)
+  attempts     Int        @default(0)
+  maxAttempts  Int        @map("max_attempts")
+  verifiedAt   DateTime?  @map("verified_at") @db.Timestamptz(3)
+  /// Set when the follow-up step (e.g. set PIN) used this verification — single use.
+  completedAt  DateTime?  @map("completed_at") @db.Timestamptz(3)
+  supersededAt DateTime?  @map("superseded_at") @db.Timestamptz(3)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@index([tenantId])
+  @@map("otp_challenges")
+}
+
+model MfaMethod {
+  id              String        @id @default(uuid(7)) @db.Uuid
+  scope           AuthScope
+  tenantId        String?       @map("tenant_id") @db.Uuid
+  userId          String?       @map("user_id") @db.Uuid
+  platformUserId  String?       @map("platform_user_id") @db.Uuid
+  type            MfaMethodType
+  /// AES-256-GCM `v1:<kid>:<iv>:<ciphertext>:<tag>`; never plaintext.
+  secretEncrypted String        @map("secret_encrypted") @db.Text
+  /// Last accepted TOTP time-step (replay protection).
+  lastUsedStep    BigInt?       @map("last_used_step")
+  verifiedAt      DateTime?     @map("verified_at") @db.Timestamptz(3)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user         User?         @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  platformUser PlatformUser? @relation(fields: [platformUserId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+  @@unique([platformUserId, type])
+  @@index([tenantId])
+  @@map("mfa_methods")
+}
+
+model MfaRecoveryCode {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  scope          AuthScope
+  tenantId       String?   @map("tenant_id") @db.Uuid
+  userId         String?   @map("user_id") @db.Uuid
+  platformUserId String?   @map("platform_user_id") @db.Uuid
+  /// HMAC-SHA256 of the normalised code; `<kid>:<hex>`.
+  codeHmac       String    @map("code_hmac") @db.VarChar(100)
+  usedAt         DateTime? @map("used_at") @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user         User?         @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Cascade)
+  platformUser PlatformUser? @relation(fields: [platformUserId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([platformUserId])
+  @@index([tenantId])
+  @@map("mfa_recovery_codes")
+}
+
+/// Tenant security/audit events (append-only for the tenant role; RLS by tenant).
+model AuditLog {
+  id            String   @id @default(uuid(7)) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  actorUserId   String?  @map("actor_user_id") @db.Uuid
+  actorLabel    String   @map("actor_label") @db.VarChar(100)
+  action        String   @db.VarChar(64)
+  resourceType  String   @map("resource_type") @db.VarChar(64)
+  resourceId    String?  @map("resource_id") @db.VarChar(64)
+  requestId     String?  @map("request_id") @db.VarChar(128)
+  ipAddress     String?  @map("ip_address") @db.VarChar(45)
+  userAgent     String?  @map("user_agent") @db.VarChar(255)
+  changedFields String[] @map("changed_fields")
+  metadata      Json?
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, createdAt])
+  @@index([actorUserId])
+  @@map("audit_logs")
+}
+
+/// Platform-scope audit (blueprint §10.1). Platform path only; invisible to the tenant role.
+model PlatformAuditLog {
+  id                  String   @id @default(uuid(7)) @db.Uuid
+  actorPlatformUserId String?  @map("actor_platform_user_id") @db.Uuid
+  actorLabel          String   @map("actor_label") @db.VarChar(100)
+  tenantId            String?  @map("tenant_id") @db.Uuid
+  action              String   @db.VarChar(64)
+  resourceType        String   @map("resource_type") @db.VarChar(64)
+  resourceId          String?  @map("resource_id") @db.VarChar(64)
+  requestId           String?  @map("request_id") @db.VarChar(128)
+  ipAddress           String?  @map("ip_address") @db.VarChar(45)
+  userAgent           String?  @map("user_agent") @db.VarChar(255)
+  changedFields       String[] @map("changed_fields")
+  metadata            Json?
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([createdAt])
+  @@index([tenantId])
+  @@index([actorPlatformUserId])
+  @@map("platform_audit_logs")
 }

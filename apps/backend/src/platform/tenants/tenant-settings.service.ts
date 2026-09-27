@@ -59,7 +59,7 @@ export class TenantSettingsService {
           data: { tenantId, domain: dto.domain, type: dto.type, isPrimary: dto.isPrimary ?? false },
         });
       });
-      this.audit.record({
+      await this.audit.recordPlatform({
         action: 'TENANT_DOMAIN_ADDED',
         resourceType: 'tenant_domain',
         resourceId: row.id,
@@ -102,7 +102,7 @@ export class TenantSettingsService {
     });
     const changed = Object.keys(dto);
     if (changed.length > 0) {
-      this.audit.record({
+      await this.audit.recordPlatform({
         action:
           dto.verified !== undefined
             ? 'TENANT_DOMAIN_VERIFICATION_CHANGED'
@@ -122,7 +122,7 @@ export class TenantSettingsService {
     const tenant = await this.tenants.requireTenant(tenantId);
     const existing = await this.requireDomain(tenantId, domainId);
     await this.prisma.tenantDomain.delete({ where: { id: domainId, tenantId } });
-    this.audit.record({
+    await this.audit.recordPlatform({
       action: 'TENANT_DOMAIN_REMOVED',
       resourceType: 'tenant_domain',
       resourceId: domainId,
@@ -169,7 +169,7 @@ export class TenantSettingsService {
       create: { tenantId, ...data },
       update: data,
     });
-    this.audit.record({
+    await this.audit.recordPlatform({
       action: 'TENANT_BRANDING_UPDATED',
       resourceType: 'tenant_branding',
       resourceId: row.id,
@@ -212,7 +212,7 @@ export class TenantSettingsService {
       create: { tenantId, featureKey, enabled },
       update: { enabled },
     });
-    this.audit.record({
+    await this.audit.recordPlatform({
       action: enabled ? 'TENANT_FEATURE_ENABLED' : 'TENANT_FEATURE_DISABLED',
       resourceType: 'tenant_feature',
       resourceId: row.id,
@@ -260,7 +260,7 @@ export class TenantSettingsService {
       create: { tenantId, key, value: json },
       update: { value: json },
     });
-    this.audit.record({
+    await this.audit.recordPlatform({
       action: 'TENANT_CONFIGURATION_UPDATED',
       resourceType: 'tenant_configuration',
       resourceId: row.id,
@@ -280,7 +280,7 @@ export class TenantSettingsService {
       where: { tenantId, key },
     });
     if (count > 0) {
-      this.audit.record({
+      await this.audit.recordPlatform({
         action: 'TENANT_CONFIGURATION_UPDATED',
         resourceType: 'tenant_configuration',
         tenantId,

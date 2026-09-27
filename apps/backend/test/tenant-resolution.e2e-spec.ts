@@ -4,6 +4,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PlatformPrismaService } from '../src/database/platform-prisma.service.js';
 import { createTestApp } from './helpers/app.js';
 import {
+  call,
+  createPlatformUser,
+  platformLogin,
+  purgePlatformUsers,
+  resetRateLimits,
+  syncRbac,
+} from './helpers/auth.js';
+import {
   createFixtureTenants,
   type FixtureLetter,
   type FixtureTenant,
@@ -25,14 +33,26 @@ describe('Tenant resolution and status enforcement (e2e)', () => {
     return req;
   };
 
+  let platformToken: string;
+
   beforeAll(async () => {
     app = await createTestApp();
     prisma = app.get(PlatformPrismaService);
+    await resetRateLimits(app);
+    await syncRbac(app);
     t = await createFixtureTenants(prisma, PREFIX);
+    await purgePlatformUsers(app, 'res-admin@');
+    await createPlatformUser(app, {
+      email: 'res-admin@acadlyx.test',
+      password: 'Res-admin-pass-2026!',
+    });
+    platformToken = (await platformLogin(app, 'res-admin@acadlyx.test', 'Res-admin-pass-2026!'))
+      .tokens.accessToken;
   });
 
   afterAll(async () => {
     await purgeTenants(prisma, PREFIX);
+    await purgePlatformUsers(app, 'res-admin@');
     await app.close();
   });
 
@@ -89,7 +109,7 @@ describe('Tenant resolution and status enforcement (e2e)', () => {
         expect(byHost.body.code).toBe('TENANT_UNAVAILABLE');
         await bootstrap({ Host: 'localhost', 'X-Acadlyx-Tenant-Key': t.C.key }).expect(403);
         // Platform routes can still inspect the tenant.
-        const platform = await request(app.getHttpServer())
+        const platform = await call(app, { token: platformToken })
           .get(`/api/v1/platform/tenants/${t.C.id}`)
           .expect(200);
         expect(platform.body.status).toBe(status);
@@ -140,9 +160,8 @@ describe('Tenant resolution and status enforcement (e2e)', () => {
   });
 
   it('platform routes do not require or use a tenant', async () => {
-    await request(app.getHttpServer())
+    await call(app, { token: platformToken, host: 'unknown-school.localhost' })
       .get('/api/v1/platform/tenants?search=RES_')
-      .set('Host', 'unknown-school.localhost')
       .expect(200);
   });
 });

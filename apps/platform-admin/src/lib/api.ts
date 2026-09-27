@@ -1,5 +1,11 @@
-import { createApiClient } from '@acadlyx/api-client';
-import { appConfig } from './config';
+import { createApiClient, CSRF_HEADER } from '@acadlyx/api-client';
 
-/** Shared API client. Auth/tenant headers are attached via `getHeaders` in later phases. */
-export const api = createApiClient({ baseUrl: appConfig.apiBaseUrl });
+/**
+ * Browser-side client for client components. It talks only to this app's same-origin BFF
+ * (/bff/api), which attaches the session from HttpOnly cookies; tokens never reach JavaScript.
+ * Every call carries the CSRF header the BFF requires for mutations.
+ */
+export const api = createApiClient({
+  baseUrl: '/bff/api',
+  getHeaders: () => ({ [CSRF_HEADER]: '1' }),
+});

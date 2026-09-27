@@ -9,7 +9,7 @@ import {
 import { Controller, Get } from '@nestjs/common';
 import { toBrandingDto } from '../tenancy/tenant-mappers.js';
 import { TenantPrismaService } from '../tenancy/tenant-prisma.service.js';
-import { TenantScoped } from '../tenancy/tenant.guard.js';
+import { Public, TenantScoped } from '../auth/core/access.decorators.js';
 
 /**
  * Public-safe tenant configuration for white-label clients (School Admin, branded mobile).
@@ -21,6 +21,8 @@ import { TenantScoped } from '../tenancy/tenant.guard.js';
 export class TenantBootstrapController {
   constructor(private readonly db: TenantPrismaService) {}
 
+  /** Public: branding must render before login (login screens, mobile start-up). */
+  @Public()
   @Get('bootstrap')
   bootstrap(): Promise<TenantBootstrap> {
     return this.db.run(async (tx) => {

@@ -1,7 +1,22 @@
+import { generateKeyPairSync, randomBytes } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { validateEnv } from './env.schema.js';
 
+// Throwaway key material generated per test run (never real secrets).
+const jwtKey = generateKeyPairSync('ed25519')
+  .privateKey.export({ format: 'der', type: 'pkcs8' })
+  .toString('base64');
+const authKeys = {
+  AUTH_JWT_PRIVATE_KEYS: JSON.stringify({ k1: jwtKey }),
+  AUTH_JWT_ACTIVE_KID: 'k1',
+  AUTH_ENCRYPTION_KEYS: JSON.stringify({ e1: randomBytes(32).toString('base64') }),
+  AUTH_ENCRYPTION_ACTIVE_KID: 'e1',
+  AUTH_HMAC_KEYS: JSON.stringify({ h1: randomBytes(32).toString('base64') }),
+  AUTH_HMAC_ACTIVE_KID: 'h1',
+};
+
 const valid = {
+  ...authKeys,
   DATABASE_URL: 'postgresql://user:s3cret-value@localhost:5432/acadlyx',
   DATABASE_APP_URL: 'postgresql://app_user:other@localhost:5432/acadlyx',
   REDIS_URL: 'redis://localhost:6379/0',
@@ -40,6 +55,26 @@ describe('validateEnv', () => {
     expect(() =>
       validateEnv({ ...valid, DATABASE_APP_URL: 'postgresql://user:x@localhost:5432/acadlyx' }),
     ).toThrow(/DATABASE_APP_URL/);
+  });
+
+  it('validates auth key rings and active key ids', () => {
+    expect(() => validateEnv({ ...valid, AUTH_JWT_ACTIVE_KID: 'missing' })).toThrow(
+      /AUTH_JWT_ACTIVE_KID/,
+    );
+    expect(() =>
+      validateEnv({
+        ...valid,
+        AUTH_ENCRYPTION_KEYS: JSON.stringify({ e1: randomBytes(16).toString('base64') }),
+      }),
+    ).toThrow(/AUTH_ENCRYPTION_KEYS/);
+    expect(() => validateEnv({ ...valid, AUTH_HMAC_KEYS: 'not-json' })).toThrow(/AUTH_HMAC_KEYS/);
+  });
+
+  it('refuses the development OTP outbox in production', () => {
+    expect(() => validateEnv({ ...valid, NODE_ENV: 'production', OTP_DELIVERY: 'dev' })).toThrow(
+      /OTP_DELIVERY/,
+    );
+    expect(validateEnv({ ...valid, NODE_ENV: 'production' }).OTP_DELIVERY).toBe('none');
   });
 
   it('never echoes configuration values in the error', () => {

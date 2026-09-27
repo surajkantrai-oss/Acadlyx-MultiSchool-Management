@@ -5,6 +5,7 @@ packages:
 # Dependencies whose install scripts are trusted (native binaries / engine downloads).
 allowBuilds:
   '@prisma/engines': true
+  argon2: true
   '@swc/core': true
   msgpackr-extract: true
   prisma: true

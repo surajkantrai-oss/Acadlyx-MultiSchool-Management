@@ -24,7 +24,16 @@ export default defineConfig({
           include: ['test/**/*.e2e-spec.ts'],
           environment: 'node',
           fileParallelism: false,
-          env: { ...dotenv, ...process.env, NODE_ENV: 'test', LOG_LEVEL: 'silent' },
+          // TRUST_PROXY lets tests give each request its own client IP (X-Forwarded-For) so the
+          // strict per-IP auth throttles are exercised deliberately, not accidentally shared.
+          env: {
+            ...dotenv,
+            ...process.env,
+            NODE_ENV: 'test',
+            LOG_LEVEL: 'silent',
+            TRUST_PROXY: '1',
+            OTP_DELIVERY: 'dev',
+          },
         },
       },
     ],

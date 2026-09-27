@@ -32,7 +32,8 @@
     "db:reset": "pnpm --filter @acadlyx/backend db:reset",
     "clean": "pnpm -r --if-present clean",
     "db:seed": "pnpm build:packages && pnpm --filter @acadlyx/backend db:seed",
-    "test:e2e:school-admin": "pnpm --filter @acadlyx/school-admin test:e2e"
+    "test:e2e:school-admin": "pnpm --filter @acadlyx/school-admin test:e2e",
+    "test:e2e:platform-admin": "pnpm --filter @acadlyx/platform-admin test:e2e"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",

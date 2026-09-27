@@ -26,7 +26,21 @@ const COLORS: Record<FixtureLetter, string> = { A: '#1D4ED8', B: '#15803D', C: '
  */
 export async function purgeTenants(prisma: PlatformPrismaService, prefix: string): Promise<void> {
   const where = { tenant: { key: { startsWith: prefix } } };
+  const tenantIds = (
+    await prisma.tenant.findMany({ where: { key: { startsWith: prefix } }, select: { id: true } })
+  ).map((t) => t.id);
+  const byTenant = { tenantId: { in: tenantIds } };
   await prisma.$transaction([
+    prisma.auditLog.deleteMany({ where: byTenant }),
+    prisma.platformAuditLog.deleteMany({ where: byTenant }),
+    prisma.otpChallenge.deleteMany({ where: byTenant }),
+    prisma.refreshToken.deleteMany({ where: byTenant }),
+    prisma.session.deleteMany({ where: byTenant }),
+    prisma.userDevice.deleteMany({ where: byTenant }),
+    prisma.mfaRecoveryCode.deleteMany({ where: byTenant }),
+    prisma.mfaMethod.deleteMany({ where: byTenant }),
+    prisma.userRole.deleteMany({ where: byTenant }),
+    prisma.user.deleteMany({ where: byTenant }),
     prisma.tenantConfiguration.deleteMany({ where }),
     prisma.tenantFeature.deleteMany({ where }),
     prisma.tenantBranding.deleteMany({ where }),

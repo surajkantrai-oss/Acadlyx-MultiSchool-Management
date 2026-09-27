@@ -18,7 +18,10 @@
     "@acadlyx/constants": "workspace:*",
     "@acadlyx/mobile-ui": "workspace:*",
     "@acadlyx/tenant-config": "workspace:*",
+    "@acadlyx/types": "workspace:*",
     "expo": "~57.0.25",
+    "expo-crypto": "~57.0.3",
+    "expo-secure-store": "~57.0.4",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
     "react-native": "0.86.3"

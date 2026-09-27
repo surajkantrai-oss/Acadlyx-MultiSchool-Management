@@ -131,8 +131,21 @@ curl -H 'X-Acadlyx-Tenant-Key: SCHOOL_B' http://localhost:4000/api/v1/tenant/boo
 
 Mobile: set `EXPO_PUBLIC_TENANT_KEY=SCHOOL_A` in `apps/mobile/.env` to see School A branding.
 
-> Platform Admin has **no authentication until Phase 3**. It is a development/internal surface
-> and must not be exposed publicly.
+### Signing in (Phase 3)
+
+Authentication is required everywhere except public tenant bootstrap and health. See
+[docs/security/AUTHENTICATION.md](docs/security/AUTHENTICATION.md),
+[RBAC.md](docs/security/RBAC.md) and [SESSION_MANAGEMENT.md](docs/security/SESSION_MANAGEMENT.md).
+
+```bash
+pnpm --filter @acadlyx/backend auth:keys   # prints fresh key rings → paste into apps/backend/.env
+PLATFORM_ADMIN_EMAIL=you@example.com PLATFORM_ADMIN_NAME="Your Name" PLATFORM_ADMIN_PASSWORD='<12+ chars>' \
+  pnpm --filter @acadlyx/backend platform:create-admin     # first Platform Admin (TOTP enrolment forced at first sign-in)
+DEV_SEED_PASSWORD='<12+ chars>' DEV_SEED_PIN='<6 digits>' pnpm db:seed   # dev school users (credentials from env only)
+```
+
+There are no default credentials. OTP codes (activation and recovery) go to a development
+outbox in Redis (`OTP_DELIVERY=dev`); production without a real provider fails closed.
 
 ## Quality
 
@@ -142,10 +155,12 @@ pnpm typecheck       # strict TypeScript across all workspaces
 pnpm test            # Vitest: packages + backend unit + e2e + tenant isolation/RLS (needs PostgreSQL + Redis, migrated)
 pnpm build           # packages, backend, both web apps
 pnpm validate:mobile # tsc + expo dependency check + iOS/Android bundle export
-pnpm test:e2e:school-admin # School Admin HTTP status codes (needs API on :4000 and `next start` on :4002)
+pnpm test:e2e:school-admin   # School Admin status codes + BFF auth (needs API on :4000 and `next start` on :4002)
+pnpm test:e2e:platform-admin # Platform Admin auth/MFA/BFF (needs API on :4000 and `next start` on :4001)
 pnpm format          # Prettier
 ```
 
 CI (`.github/workflows/ci.yml`) runs the same gates on every push to `main` and on every pull
 request: Node 22.23.2, pnpm 11.19.0, frozen install, PostgreSQL 17 and Redis 8 services, database
-role setup and `migrate deploy`. It does not deploy.
+role setup and `migrate deploy`, throwaway per-run auth key rings, a committed-secret guard, and
+the web auth e2e suites. It does not deploy.

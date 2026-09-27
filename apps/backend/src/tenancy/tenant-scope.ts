@@ -14,7 +14,34 @@ export const TENANT_SCOPED_MODELS: Readonly<Record<string, 'id' | 'tenantId'>> =
   TenantBranding: 'tenantId',
   TenantFeature: 'tenantId',
   TenantConfiguration: 'tenantId',
+  User: 'tenantId',
+  UserRole: 'tenantId',
+  UserDevice: 'tenantId',
+  Session: 'tenantId',
+  RefreshToken: 'tenantId',
+  OtpChallenge: 'tenantId',
+  MfaMethod: 'tenantId',
+  MfaRecoveryCode: 'tenantId',
+  AuditLog: 'tenantId',
 };
+
+/**
+ * Global reference data readable (never writable) on the tenant path: the RBAC catalogue has
+ * no tenant rows. Queries pass through unscoped; the database grants are SELECT-only.
+ */
+export const TENANT_READONLY_GLOBAL_MODELS: ReadonlySet<string> = new Set([
+  'Role',
+  'Permission',
+  'RolePermission',
+]);
+const READ_OPERATIONS = new Set([
+  'findUnique',
+  'findUniqueOrThrow',
+  'findFirst',
+  'findFirstOrThrow',
+  'findMany',
+  'count',
+]);
 
 const WHERE_OPERATIONS = new Set([
   'findUnique',
@@ -69,6 +96,12 @@ export function scopeQueryArgs(
   args: unknown,
   tenantId: string,
 ): Args {
+  if (model !== undefined && TENANT_READONLY_GLOBAL_MODELS.has(model)) {
+    if (!READ_OPERATIONS.has(operation)) {
+      throw new TenantScopeViolationError(`${model} is read-only on the tenant path`);
+    }
+    return isRecord(args) ? { ...args } : {};
+  }
   const column = model === undefined ? undefined : TENANT_SCOPED_MODELS[model];
   if (model === undefined || column === undefined) {
     throw new TenantScopeViolationError(

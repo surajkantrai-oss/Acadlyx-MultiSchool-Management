@@ -47,6 +47,11 @@ jobs:
       API_PUBLIC_URL: http://localhost:4000
       NEXT_PUBLIC_API_BASE_URL: http://localhost:4000/api/v1
       EXPO_PUBLIC_API_BASE_URL: http://localhost:4000/api/v1
+      # Server-side (BFF) API URL for the Next.js apps.
+      ACADLYX_API_URL: http://localhost:4000/api/v1
+      AUTH_JWT_ISSUER: acadlyx
+      # Dev OTP outbox (Redis) — the tests read codes from it. Production fails closed.
+      OTP_DELIVERY: dev
       NEXT_TELEMETRY_DISABLED: '1'
       CI: 'true'
 
@@ -63,6 +68,38 @@ jobs:
 
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
+
+      - name: Guard against committed secrets (.env files, private keys)
+        run: |
+          if git ls-files | grep -E '(^|/)\.env(\.local|\.production|\.development)?$'; then
+            echo "::error::.env files must never be committed"; exit 1
+          fi
+          # PEM private keys and complete base64 PKCS#8 Ed25519 DER keys (64 chars).
+          if git grep -nE -e '-----BEGIN [A-Z ]*PRIVATE KEY-----' -e 'MC4CAQAwBQYDK2VwBCIEI[A-Za-z0-9+/]{43}' \
+            -- . ':!*.md' ':!.github/workflows/ci.yml'; then
+            echo "::error::Private key material found in the repository"; exit 1
+          fi
+
+      # Throwaway per-run key rings (two key ids each, exercising key-id lookup). Generated in
+      # memory, masked in logs, never written to the repository.
+      - name: Generate throwaway auth key rings
+        run: |
+          node --input-type=module -e '
+            import { generateKeyPairSync, randomBytes } from "node:crypto";
+            import { appendFileSync } from "node:fs";
+            const ed = () => generateKeyPairSync("ed25519").privateKey.export({ format: "der", type: "pkcs8" }).toString("base64");
+            const rnd = () => randomBytes(32).toString("base64");
+            const env = {
+              AUTH_JWT_PRIVATE_KEYS: JSON.stringify({ "ci-jwt-old": ed(), "ci-jwt-1": ed() }),
+              AUTH_JWT_ACTIVE_KID: "ci-jwt-1",
+              AUTH_ENCRYPTION_KEYS: JSON.stringify({ "ci-enc-old": rnd(), "ci-enc-1": rnd() }),
+              AUTH_ENCRYPTION_ACTIVE_KID: "ci-enc-1",
+              AUTH_HMAC_KEYS: JSON.stringify({ "ci-hmac-old": rnd(), "ci-hmac-1": rnd() }),
+              AUTH_HMAC_ACTIVE_KID: "ci-hmac-1",
+            };
+            for (const v of Object.values(env)) for (const part of v.match(/[A-Za-z0-9+\/=]{40,}/g) ?? []) console.log(`::add-mask::${part}`);
+            appendFileSync(process.env.GITHUB_ENV, Object.entries(env).map(([k, v]) => `${k}=${v}\n`).join(""));
+          '
 
       - name: Create database roles (owner with BYPASSRLS, restricted acadlyx_app)
         env:
@@ -87,21 +124,28 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Test (packages + backend unit + backend e2e)
+      # Includes the Phase 3 auth suites: tenant/platform auth, cross-tenant attacks, JWT, refresh
+      # rotation/reuse, OTP, lockout, MFA, concurrency, RLS on auth tables, Redis outage.
+      - name: Test (packages + backend unit + backend e2e incl. auth)
         run: pnpm test
 
       - name: Build (packages, backend, web apps)
         run: pnpm build
 
-      - name: School Admin HTTP status e2e (API + next start)
+      - name: Web e2e — School Admin status + BFF auth, Platform Admin auth (API + next start)
         run: |
           (cd apps/backend && node dist/main.js > "$RUNNER_TEMP/api.log" 2>&1 &)
           (cd apps/school-admin && pnpm start > "$RUNNER_TEMP/school-admin.log" 2>&1 &)
+          (cd apps/platform-admin && pnpm start > "$RUNNER_TEMP/platform-admin.log" 2>&1 &)
           for i in $(seq 1 60); do
-            curl -sf -o /dev/null http://localhost:4000/api/v1/health && curl -s -o /dev/null http://127.0.0.1:4002 && break
+            curl -sf -o /dev/null http://localhost:4000/api/v1/health \
+              && curl -s -o /dev/null http://127.0.0.1:4002 \
+              && curl -s -o /dev/null http://localhost:4001/login && break
             sleep 2
           done
-          pnpm test:e2e:school-admin || { cat "$RUNNER_TEMP/api.log" "$RUNNER_TEMP/school-admin.log"; exit 1; }
+          pnpm test:e2e:school-admin && pnpm test:e2e:platform-admin || {
+            cat "$RUNNER_TEMP/api.log" "$RUNNER_TEMP/school-admin.log" "$RUNNER_TEMP/platform-admin.log"; exit 1;
+          }
 
       - name: Validate mobile (tsc, expo dependency check, iOS/Android bundle export)
         run: pnpm validate:mobile

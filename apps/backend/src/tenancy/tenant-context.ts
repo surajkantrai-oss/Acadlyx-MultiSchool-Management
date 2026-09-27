@@ -1,45 +1,41 @@
-import { AsyncLocalStorage } from 'node:async_hooks';
-import type { TenantStatus } from '@acadlyx/tenant-config';
 import { InternalServerErrorException } from '@nestjs/common';
 import { tenantUnavailable } from '../common/errors/domain-errors.js';
+import {
+  RequestContext,
+  type ResolvedTenant,
+  type TenantResolution,
+} from '../common/request-context.js';
 
-/** Tenant identity established by the resolver for the current request. */
-export interface ResolvedTenant {
-  id: string;
-  key: string;
-  slug: string;
-  status: TenantStatus;
-}
-
-export type TenantResolution =
-  | { outcome: 'resolved'; tenant: ResolvedTenant; source: 'host' | 'tenant-key' }
-  | { outcome: 'not-found' }
-  | { outcome: 'conflict' };
-
-interface TenantRequestState {
-  resolution: TenantResolution;
-}
-
-const storage = new AsyncLocalStorage<TenantRequestState>();
+export type { ResolvedTenant, TenantResolution } from '../common/request-context.js';
 
 /**
- * Request-scoped tenant context backed by AsyncLocalStorage — one isolated store per request,
- * safe under concurrency (no global mutable state). Established only by
- * TenantResolutionMiddleware; read by TenantGuard and TenantPrismaService.
+ * Request-scoped tenant context, stored in the per-request RequestContext (AsyncLocalStorage):
+ * one isolated store per request, safe under concurrency, no global mutable state. Set only by
+ * TenantResolutionMiddleware; read by AccessGuard and TenantPrismaService.
  */
 export const TenantContext = {
-  /** Runs `fn` with `resolution` as the current request's tenant state. */
+  /** Runs `fn` in a fresh request store with `resolution` (used by tests and scripts). */
   run<T>(resolution: TenantResolution, fn: () => T): T {
-    return storage.run({ resolution }, fn);
+    return RequestContext.run({ requestId: null, ip: null, userAgent: null }, () => {
+      TenantContext.set(resolution);
+      return fn();
+    });
+  },
+
+  /** Records the resolution on the current request store. */
+  set(resolution: TenantResolution): void {
+    const state = RequestContext.state();
+    if (!state) throw new InternalServerErrorException('Request context is not established');
+    state.tenantResolution = resolution;
   },
 
   resolution(): TenantResolution | undefined {
-    return storage.getStore()?.resolution;
+    return RequestContext.state()?.tenantResolution;
   },
 
   /** The resolved tenant, if any (regardless of status). */
   getTenant(): ResolvedTenant | undefined {
-    const resolution = storage.getStore()?.resolution;
+    const resolution = TenantContext.resolution();
     return resolution?.outcome === 'resolved' ? resolution.tenant : undefined;
   },
 

@@ -28,3 +28,5 @@ export interface ApiErrorResponse {
   timestamp: string;
   path: string;
 }
+
+export * from './auth.js';

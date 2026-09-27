@@ -1,4 +1,3 @@
-import 'server-only';
 import http from 'node:http';
 import https from 'node:https';
 
@@ -29,12 +28,19 @@ export const hostForwardingFetch: typeof fetch = (input, init = {}) => {
           for (const [name, value] of Object.entries(res.headers)) {
             if (typeof value === 'string') responseHeaders.set(name, value);
           }
-          resolve(
-            new Response(Buffer.concat(chunks), {
-              status: res.statusCode ?? 500,
-              headers: responseHeaders,
-            }),
-          );
+          const status = res.statusCode ?? 500;
+          try {
+            // 204/205/304 must have a null body — `new Response(buffer, {status: 204})` throws.
+            const nullBody = status === 204 || status === 205 || status === 304;
+            resolve(
+              new Response(nullBody ? null : Buffer.concat(chunks), {
+                status,
+                headers: responseHeaders,
+              }),
+            );
+          } catch (error) {
+            reject(error instanceof Error ? error : new Error(String(error)));
+          }
         });
         res.on('error', reject);
       },

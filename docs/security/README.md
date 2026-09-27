@@ -1,9 +1,16 @@
 # Security
 
-Phase 1 provided global security primitives. Phase 2 added tenant isolation. Authentication,
-MFA and RBAC arrive in Phase 3; until then **Platform Admin and the platform API are
-unauthenticated** and must stay an internal/development surface. No temporary passwords, fake
-tokens or secret headers were added to simulate protection.
+Phase 1 provided global security primitives. Phase 2 added tenant isolation. Phase 3 added
+authentication, MFA, RBAC and session management:
+
+- [AUTHENTICATION.md](AUTHENTICATION.md): identities, credentials, lockout, tokens, MFA, OTP,
+  devices, rate limiting and audit.
+- [RBAC.md](RBAC.md): permissions, roles and enforcement.
+- [SESSION_MANAGEMENT.md](SESSION_MANAGEMENT.md): session lifetimes, rotation, revocation,
+  web BFF cookies and CSRF, and mobile secure storage.
+
+Every API route is protected by the global `AccessGuard` and fails closed without a declared
+policy.
 
 | Control            | Implementation                                                                                                                                           |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -14,9 +21,10 @@ tokens or secret headers were added to simulate protection.
 | Env validation     | zod schema at boot. The app fails fast without printing values.                                                                                          |
 | Secrets            | Only in `.env` (gitignored) locally and in Secrets Manager in production. Never in source.                                                               |
 | Safe errors        | Global filter. 5xx responses never expose internals.                                                                                                     |
-| Log redaction      | Authorization, cookies, API keys and `password`/`pin`/`otp`/`token`/`secret` fields are redacted                                                         |
-| Rate limiting      | `@nestjs/throttler` global guard (in-memory; switch to Redis storage before running more than one instance)                                              |
-| Audit logging      | Tenant-management actions are recorded to structured logs (request id, tenant, changed field names, actor placeholder). Persistence arrives in Phase 3.  |
+| Log redaction      | Authorization, cookies, API keys, `password`/`pin`/`otp`/`code`/`token`/`secret` fields and auth key rings are redacted (tested)                         |
+| Rate limiting      | `@nestjs/throttler` with Redis storage (shared across instances) and stricter auth-route throttles; in-memory fallback if Redis fails (never unlimited)  |
+| Audit logging      | Persisted to `audit_logs` (tenant, RLS, append-only) and `platform_audit_logs`, with real actor identity. Never secrets or codes.                        |
+| Caching of auth    | `Cache-Control: no-store` on every API response                                                                                                          |
 | Proxy awareness    | `TRUST_PROXY` for correct client IPs behind a load balancer                                                                                              |
 
 ## Tenant isolation (Phase 2)

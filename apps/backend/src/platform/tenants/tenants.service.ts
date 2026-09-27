@@ -102,7 +102,7 @@ export class TenantsService {
           firstActivatedAt: active ? new Date() : null,
         },
       });
-      this.audit.record({
+      await this.audit.recordPlatform({
         action: 'TENANT_CREATED',
         resourceType: 'tenant',
         resourceId: tenant.id,
@@ -181,7 +181,7 @@ export class TenantsService {
       } catch (error) {
         throw this.mapUniqueErrors(error);
       }
-      this.audit.record({
+      await this.audit.recordPlatform({
         action: 'TENANT_UPDATED',
         resourceType: 'tenant',
         resourceId: id,
@@ -219,7 +219,7 @@ export class TenantsService {
         'Tenant status changed concurrently; reload and retry',
       );
     }
-    this.audit.record({
+    await this.audit.recordPlatform({
       action: AUDIT_ACTION[action],
       resourceType: 'tenant',
       resourceId: id,

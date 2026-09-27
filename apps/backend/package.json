@@ -21,10 +21,13 @@
     "db:status": "prisma migrate status",
     "db:reset": "prisma migrate reset",
     "clean": "rm -rf dist src/generated *.tsbuildinfo",
-    "db:seed": "nest build && node --env-file-if-exists=.env dist/database/seed.js"
+    "db:seed": "nest build && node --env-file-if-exists=.env dist/database/seed.js",
+    "auth:keys": "nest build && node dist/cli/generate-auth-keys.js",
+    "platform:create-admin": "nest build && node --env-file-if-exists=.env dist/cli/create-platform-admin.js"
   },
   "dependencies": {
     "@acadlyx/constants": "workspace:*",
+    "@acadlyx/permissions": "workspace:*",
     "@acadlyx/tenant-config": "workspace:*",
     "@acadlyx/types": "workspace:*",
     "@acadlyx/validation": "workspace:*",
@@ -36,11 +39,13 @@
     "@nestjs/throttler": "6.7.1",
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
+    "argon2": "0.45.1",
     "bullmq": "6.3.9",
     "class-transformer": "0.5.1",
     "class-validator": "0.15.1",
     "helmet": "8.3.0",
     "ioredis": "6.0.0",
+    "jose": "6.2.12",
     "nestjs-pino": "5.2.1",
     "pino": "10.3.1",
     "pino-http": "11.0.0",

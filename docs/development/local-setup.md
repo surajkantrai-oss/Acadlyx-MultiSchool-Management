@@ -34,12 +34,32 @@ DATABASE_URL=postgresql://acadlyx:<owner-password>@localhost:5432/acadlyx?schema
 DATABASE_APP_URL=postgresql://acadlyx_app:<app-password>@localhost:5432/acadlyx?schema=public
 ```
 
-Apply migrations and load the demo tenants:
+Generate development auth keys (Phase 3) and paste the printed lines into `apps/backend/.env`
+(never commit them):
+
+```bash
+pnpm --filter @acadlyx/backend auth:keys
+```
+
+Apply migrations and load the demo tenants. The dev user credentials come only from your
+environment; without `DEV_SEED_PASSWORD` and `DEV_SEED_PIN`, users are created in
+PENDING_ACTIVATION:
 
 ```bash
 pnpm db:migrate:deploy
-pnpm db:seed
+DEV_SEED_PASSWORD='<12+ chars>' DEV_SEED_PIN='<6 digits>' pnpm db:seed
 ```
+
+Create the first Platform Admin (TOTP enrolment is forced at first sign-in on
+http://localhost:4001/login):
+
+```bash
+PLATFORM_ADMIN_EMAIL=you@example.com PLATFORM_ADMIN_NAME="Your Name" PLATFORM_ADMIN_PASSWORD='<12+ chars>' \
+  pnpm --filter @acadlyx/backend platform:create-admin
+```
+
+OTP codes for activation and recovery are written to the Redis dev outbox (`OTP_DELIVERY=dev`)
+and are never sent anywhere.
 
 ## Local tenant domains
 

@@ -20,6 +20,28 @@ export const REDACT_PATHS = [
   '*.accessToken',
   '*.refreshToken',
   '*.secret',
+  // Phase 3 auth fields (request bodies are never serialised, but defend in depth).
+  '*.currentSecret',
+  '*.newSecret',
+  '*.passwordHash',
+  '*.credentialHash',
+  '*.pinHash',
+  '*.code',
+  '*.codeHmac',
+  '*.recoveryCode',
+  '*.recoveryCodes',
+  '*.mfaToken',
+  '*.grantToken',
+  '*.mfaSecret',
+  '*.secretEncrypted',
+  '*.installationId',
+  '*.activationCode',
+  '*.otp',
+  '*.privateKey',
+  '*.privateKeys',
+  '*.AUTH_JWT_PRIVATE_KEYS',
+  '*.AUTH_ENCRYPTION_KEYS',
+  '*.AUTH_HMAC_KEYS',
 ];
 
 /** Accepts a well-formed incoming request id, otherwise generates one, and echoes it back. */

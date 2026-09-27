@@ -1,81 +1,91 @@
-import { APP_NAME } from '@acadlyx/constants';
 import { FEATURE_REGISTRY } from '@acadlyx/tenant-config';
 import { Card } from '@acadlyx/web-ui';
-import { forbidden, notFound } from 'next/navigation';
+import Link from 'next/link';
+import { BrandedFrame } from '@/components/branded-frame';
+import { SchoolLogin } from '@/components/school-login';
+import { SignOutButton } from '@/components/sign-out-button';
 import { TenantProblem } from '@/components/tenant-problem';
-import { loadCurrentTenant } from '@/lib/tenant';
+import { requireSchool } from '@/lib/school-page';
+import { currentSession } from '@/lib/server/session';
 
 export const dynamic = 'force-dynamic';
 
-export default async function DashboardPage() {
-  const result = await loadCurrentTenant();
-
-  // Real HTTP semantics: unknown school → 404, known but unavailable school → 403.
-  if (result.kind === 'not-found') notFound();
-  if (result.kind === 'unavailable') forbidden();
-  if (result.kind !== 'ok') return <TenantProblem kind={result.kind} host={result.host} />;
-
-  const { tenant } = result;
-  const labels = new Map(FEATURE_REGISTRY.map((f) => [f.key as string, f.label]));
+/**
+ * School home. Tenant resolution first (404/403 as in Phase 2); then either the branded sign-in
+ * (no session) or the authenticated Phase 3 shell (identity, roles, school). No module screens yet.
+ */
+export default async function HomePage() {
+  const tenant = await requireSchool();
+  if ('problem' in tenant) return <TenantProblem kind={tenant.problem} host={tenant.host} />;
+  const session = await currentSession();
   const name = tenant.branding?.schoolName ?? tenant.displayName;
 
+  if (!session) {
+    return (
+      <BrandedFrame tenant={tenant}>
+        <div className="mx-auto w-full max-w-sm">
+          <h1 className="mb-4 text-2xl font-semibold tracking-tight">Sign in to {name}</h1>
+          <SchoolLogin />
+          <p className="mt-4 text-center text-sm">
+            <Link href="/activate" className="underline">
+              Activate your account
+            </Link>{' '}
+            ·{' '}
+            <Link href="/recover" className="underline">
+              Forgot PIN or password?
+            </Link>
+          </p>
+        </div>
+      </BrandedFrame>
+    );
+  }
+
+  const { me } = session;
+  const labels = new Map(FEATURE_REGISTRY.map((f) => [f.key as string, f.label]));
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="text-white" style={{ backgroundColor: 'var(--brand-primary)' }}>
-        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-4">
-          {tenant.branding?.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element -- tenant logos are arbitrary external https URLs
-            <img
-              src={tenant.branding.logoUrl}
-              alt=""
-              className="h-8 w-8 rounded bg-white object-contain"
-            />
-          ) : null}
-          <span className="text-lg font-semibold tracking-tight" data-testid="school-name">
-            {name}
-          </span>
-          <span className="rounded bg-white/20 px-2 py-0.5 text-sm">School Admin</span>
-        </div>
-      </header>
-      <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">
-        <h1 className="text-2xl font-semibold tracking-tight">Welcome to {name}</h1>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Card title="Your school">
-            <dl className="grid grid-cols-2 gap-y-1">
-              <dt>School key</dt>
-              <dd className="font-mono" data-testid="tenant-key">
-                {tenant.key}
-              </dd>
-              <dt>Time zone</dt>
-              <dd>{String(tenant.settings['general.timezone'] ?? '—')}</dd>
-            </dl>
-          </Card>
-          <Card title="Enabled modules">
-            {tenant.enabledFeatures.length === 0 ? (
-              <p>No modules enabled yet.</p>
-            ) : (
-              <ul className="flex flex-wrap gap-2" data-testid="enabled-features">
-                {tenant.enabledFeatures.map((key) => (
-                  <li
-                    key={key}
-                    className="rounded px-2 py-0.5 text-xs text-white"
-                    style={{ backgroundColor: 'var(--brand-accent)' }}
-                  >
-                    {labels.get(key) ?? key}
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="mt-3 text-xs text-slate-400">
-              Module screens are delivered in later phases.
-            </p>
-          </Card>
-        </div>
-      </main>
-      <footer className="mx-auto max-w-6xl px-4 pb-8 text-xs text-slate-500">
-        {tenant.branding?.footerText ?? `${name} · Powered by ${APP_NAME}`}
-        {tenant.branding?.supportEmail ? ` · ${tenant.branding.supportEmail}` : ''}
-      </footer>
-    </div>
+    <BrandedFrame
+      tenant={tenant}
+      nav={
+        <>
+          <Link href="/security" className="text-white/90 hover:text-white">
+            Security
+          </Link>
+          <SignOutButton className="text-white/90 hover:text-white" />
+        </>
+      }
+    >
+      <h1 className="text-2xl font-semibold tracking-tight">Welcome, {me.displayName}</h1>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Card title="Signed in as">
+          <p data-testid="me-name">{me.displayName}</p>
+          <p className="text-xs">
+            {[me.identifiers.email, me.identifiers.phone, me.identifiers.loginId]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        </Card>
+        <Card title="Your roles">
+          <ul data-testid="me-roles" className="flex flex-wrap gap-2">
+            {me.roles.map((r) => (
+              <li key={r} className="rounded bg-slate-100 px-2 py-0.5 text-xs">
+                {r}
+              </li>
+            ))}
+          </ul>
+        </Card>
+        <Card title="School">
+          <p className="font-mono" data-testid="tenant-key">
+            {tenant.key}
+          </p>
+          <p className="text-xs">
+            {tenant.enabledFeatures.map((k) => labels.get(k) ?? k).join(', ') ||
+              'No modules enabled yet'}
+          </p>
+          <p className="mt-2 text-xs text-slate-400">
+            Module screens are delivered in later phases.
+          </p>
+        </Card>
+      </div>
+    </BrandedFrame>
   );
 }

@@ -194,9 +194,9 @@ It exposes no internal ids, domains or private configuration.
 `TENANT_DEACTIVATED`, `TENANT_ARCHIVED`, `TENANT_DOMAIN_ADDED|UPDATED|REMOVED|VERIFICATION_CHANGED`,
 `TENANT_BRANDING_UPDATED`, `TENANT_FEATURE_ENABLED|DISABLED` and `TENANT_CONFIGURATION_UPDATED`
 to the structured log. Each record carries the request id, tenant id and key, the names of changed
-fields (never their values) and a timestamp. The actor is recorded as
-`unauthenticated-platform-dev` until Phase 3 provides real identities. Persisting to an AuditLog
-table comes with Phase 3.
+fields (never their values) and a timestamp. Since Phase 3 these events are persisted to
+`platform_audit_logs` with the authenticated Platform Admin as actor. Tenant auth events go to
+`audit_logs` (see [../security/AUTHENTICATION.md](../security/AUTHENTICATION.md#audit)).
 
 ## Caching
 

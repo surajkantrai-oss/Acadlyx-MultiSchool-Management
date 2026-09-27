@@ -12,14 +12,16 @@ Items noticed during Phase 1 that were intentionally **not** implemented.
 - Tenant branches (blueprint §3.1): later school-structure phase.
 - Branded native mobile builds per tenant (app id, icons, store listing): white-label build phase.
 
-## Phase 3 — Authentication & RBAC
+## Noted during Phase 3 (deliberately not implemented)
 
-- Fill `@acadlyx/permissions` with the permission catalogue (blueprint §5.7).
-- Stricter `@Throttle()` limits on login/OTP routes. Move throttler storage to Redis.
-- Attach auth headers through `createApiClient({ getHeaders })`.
-- Persist `AuditService` events to a tenant-scoped AuditLog table, with real actor identity
-  replacing `unauthenticated-platform-dev`.
-- Protect `/api/v1/platform/*` and the Platform Admin app (Platform Super Admin role + MFA).
+- Real SMS and email OTP providers. Delivery is the dev outbox only, and production fails closed.
+- OTP step-up for new devices (they are recorded and audited only; approved decision).
+- WebAuthn and passkeys (`mfa_method_type` already includes `WEBAUTHN`).
+- Custom roles and permissions, bulk user import, parent–student linking and user profiles.
+- Platform user management UI (platform users are created with the CLI only).
+- Mobile TOTP enrolment (users enrol on the web; mobile supports the MFA challenge).
+- Mobile feature screens: the app stops at sign-in, session restore and sign-out.
+- Automated audit-log retention and archival.
 
 ## CI/CD and deployment phases
 

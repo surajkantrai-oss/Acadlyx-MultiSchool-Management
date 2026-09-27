@@ -20,7 +20,23 @@ import type {
   TenantSummary,
 } from '@acadlyx/tenant-config';
 import { TENANT_KEY_HEADER } from '@acadlyx/tenant-config';
-import type { ApiErrorResponse, HealthResponse } from '@acadlyx/types';
+import type {
+  ApiErrorResponse,
+  AuthResult,
+  AuthTokens,
+  DeviceDescriptor,
+  DeviceInfo,
+  HealthResponse,
+  IssuedActivationCode,
+  MeResponse,
+  MfaEnrollmentComplete,
+  MfaEnrollmentStart,
+  OtpGrant,
+  SessionInfo,
+  TenantUserSummary,
+} from '@acadlyx/types';
+
+export * from './web-auth.js';
 import { joinUrl } from '@acadlyx/utils';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -98,7 +114,26 @@ export interface TenantRequestContext {
   tenantKey?: string;
 }
 
-function toQuery(query: TenantListQuery): string {
+export interface CreateTenantUserRequest {
+  displayName: string;
+  email?: string;
+  phone?: string;
+  loginId?: string;
+  loginIdKind?: 'STUDENT_ID' | 'EMPLOYEE_ID';
+  roles: string[];
+}
+
+export interface TenantUserListQuery {
+  search?: string;
+  status?: string;
+  role?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+type MfaFactor = { code: string } | { recoveryCode: string };
+
+function toQuery(query: TenantListQuery | TenantUserListQuery): string {
   const params = new URLSearchParams();
   for (const [name, value] of Object.entries(query)) {
     if (value !== undefined && value !== '') params.set(name, String(value));
@@ -189,6 +224,122 @@ export function createApiClient(options: ApiClientOptions) {
         }),
       resetConfiguration: (id: string, key: ConfigurationKey) =>
         request<TenantConfigurationEntry>('DELETE', `${t(id)}/configuration/${key}`),
+
+      listUsers: (id: string, query: TenantUserListQuery = {}) =>
+        request<Paginated<TenantUserSummary>>('GET', `${t(id)}/users${toQuery(query)}`),
+      createUser: (id: string, body: CreateTenantUserRequest) =>
+        request<TenantUserSummary>('POST', `${t(id)}/users`, { body }),
+      getUser: (id: string, userId: string) =>
+        request<TenantUserSummary>('GET', `${t(id)}/users/${encodeURIComponent(userId)}`),
+      renameUser: (id: string, userId: string, displayName: string) =>
+        request<TenantUserSummary>('PATCH', `${t(id)}/users/${encodeURIComponent(userId)}`, {
+          body: { displayName },
+        }),
+      assignRole: (id: string, userId: string, roleKey: string) =>
+        request<TenantUserSummary>('POST', `${t(id)}/users/${encodeURIComponent(userId)}/roles`, {
+          body: { roleKey },
+        }),
+      removeRole: (id: string, userId: string, roleKey: string) =>
+        request<TenantUserSummary>(
+          'DELETE',
+          `${t(id)}/users/${encodeURIComponent(userId)}/roles/${encodeURIComponent(roleKey)}`,
+        ),
+      userAction: (
+        id: string,
+        userId: string,
+        action: 'suspend' | 'reactivate' | 'disable' | 'reset-activation',
+      ) =>
+        request<TenantUserSummary>(
+          'POST',
+          `${t(id)}/users/${encodeURIComponent(userId)}/${action}`,
+        ),
+      issueActivationCode: (id: string, userId: string) =>
+        request<IssuedActivationCode>(
+          'POST',
+          `${t(id)}/users/${encodeURIComponent(userId)}/activation-code`,
+        ),
+    },
+
+    /** Authentication endpoints. `base` = 'platform/auth' or 'auth' (tenant, Host-resolved). */
+    auth: (base: 'platform/auth' | 'auth', context: TenantRequestContext = {}) => {
+      const headers: Record<string, string> = {};
+      if (context.host) headers.host = context.host;
+      if (context.tenantKey) headers[TENANT_KEY_HEADER] = context.tenantKey;
+      const call = <T>(method: HttpMethod, path: string, body?: unknown) =>
+        request<T>(method, `${base}/${path}`, { headers, ...(body === undefined ? {} : { body }) });
+      return {
+        login: (identifier: string, secret: string, device?: DeviceDescriptor) =>
+          call<AuthResult>(
+            'POST',
+            'login',
+            base === 'auth'
+              ? { identifier, secret, device }
+              : { email: identifier, password: secret, device },
+          ),
+        refresh: (refreshToken: string) => call<AuthTokens>('POST', 'refresh', { refreshToken }),
+        verifyMfa: (mfaToken: string, factor: MfaFactor) =>
+          call<AuthTokens>('POST', 'mfa/verify', { mfaToken, ...factor }),
+        startPendingEnrollment: (mfaToken: string) =>
+          call<MfaEnrollmentStart>('POST', 'mfa/enroll/start', { mfaToken }),
+        confirmPendingEnrollment: (mfaToken: string, code: string) =>
+          call<MfaEnrollmentComplete>('POST', 'mfa/enroll/confirm', { mfaToken, code }),
+        me: () => call<MeResponse>('GET', 'me'),
+        logout: () => call<null>('POST', 'logout'),
+        logoutAll: () => call<null>('POST', 'logout-all'),
+        sessions: () => call<SessionInfo[]>('GET', 'sessions'),
+        revokeSession: (sessionId: string) =>
+          call<null>('DELETE', `sessions/${encodeURIComponent(sessionId)}`),
+        devices: () => call<DeviceInfo[]>('GET', 'devices'),
+        revokeDevice: (deviceId: string) =>
+          call<null>('DELETE', `devices/${encodeURIComponent(deviceId)}`),
+        changeCredential: (
+          currentSecret: string,
+          credentialType: 'PASSWORD' | 'PIN',
+          newSecret: string,
+        ) => call<null>('POST', 'credentials/change', { currentSecret, credentialType, newSecret }),
+        startTotp: () => call<MfaEnrollmentStart>('POST', 'mfa/totp/start'),
+        confirmTotp: (code: string) =>
+          call<MfaEnrollmentComplete>('POST', 'mfa/totp/confirm', { code }),
+        removeTotp: (currentSecret: string, code: string) =>
+          call<null>('POST', 'mfa/totp/remove', { currentSecret, code }),
+        regenerateRecoveryCodes: (code: string) =>
+          call<{ recoveryCodes: string[] }>('POST', 'mfa/recovery-codes/regenerate', { code }),
+        startActivation: (identifier: string) =>
+          call<{ message: string }>('POST', 'activation/start', { identifier }),
+        verifyActivation: (identifier: string, code: string) =>
+          call<OtpGrant>('POST', 'activation/verify', { identifier, code }),
+        completeActivation: (
+          grantToken: string,
+          credentialType: 'PASSWORD' | 'PIN',
+          secret: string,
+          device?: DeviceDescriptor,
+        ) =>
+          call<AuthResult>('POST', 'activation/complete', {
+            grantToken,
+            credentialType,
+            secret,
+            device,
+          }),
+        startRecovery: (identifier: string) =>
+          call<{ message: string }>('POST', 'recovery/start', { identifier }),
+        verifyRecovery: (identifier: string, code: string) =>
+          call<OtpGrant>('POST', 'recovery/verify', { identifier, code }),
+        completeRecovery: (
+          grantToken: string,
+          credentialType: 'PASSWORD' | 'PIN',
+          secret: string,
+        ) => call<null>('POST', 'recovery/complete', { grantToken, credentialType, secret }),
+      };
+    },
+
+    /** Authenticated tenant workspace (Phase 3 shell). */
+    workspace: (context: TenantRequestContext = {}) => {
+      const headers: Record<string, string> = context.host ? { host: context.host } : {};
+      return request<{
+        tenant: { key: string; slug: string };
+        roles: string[];
+        permissions: string[];
+      }>('GET', 'tenant/workspace', { headers });
     },
 
     /** Tenant-scoped endpoints. The tenant is resolved server-side from Host / tenant key. */

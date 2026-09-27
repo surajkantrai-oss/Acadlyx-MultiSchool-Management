@@ -13,8 +13,8 @@ export interface TenantLogFields {
 export type RequestWithTenant = Request & { tenantLog?: TenantLogFields };
 
 /**
- * Resolves the tenant and runs the rest of the request pipeline inside TenantContext.
- * Never rejects on its own: TenantGuard turns the stored resolution into 404/400/403, so all
+ * Resolves the tenant and records it on the request's TenantContext.
+ * Never rejects on its own: AccessGuard turns the stored resolution into 404/400/403, so all
  * tenant errors flow through guards and the global exception filter consistently.
  * Applied only to tenant-scoped controllers (TenantApiModule); platform routes never see it.
  */
@@ -31,8 +31,8 @@ export class TenantResolutionMiddleware implements NestMiddleware {
     if (resolution.outcome === 'resolved') {
       req.tenantLog = { tenantId: resolution.tenant.id, tenantKey: resolution.tenant.key };
     }
-    TenantContext.run(resolution, () => {
-      next();
-    });
+    // Stored on the per-request context opened by RequestContextMiddleware.
+    TenantContext.set(resolution);
+    next();
   }
 }

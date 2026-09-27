@@ -20,6 +20,17 @@ export function configureApp(app: NestExpressApplication): INestApplication {
   app.useBodyParser('urlencoded', { limit: config.get('BODY_LIMIT'), extended: false });
 
   app.use(securityHeaders());
+  // API responses are per-user and often security-sensitive (tokens, sessions): never cache.
+  app.use(
+    (
+      _req: unknown,
+      res: { setHeader: (name: string, value: string) => void },
+      next: () => void,
+    ) => {
+      res.setHeader('Cache-Control', 'no-store');
+      next();
+    },
+  );
   app.enableCors(buildCorsOptions(config.get('CORS_ORIGINS')));
 
   app.setGlobalPrefix(API_BASE_PATH.slice(1));

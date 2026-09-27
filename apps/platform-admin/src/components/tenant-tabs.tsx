@@ -9,6 +9,7 @@ const TABS = [
   { href: '/domains', label: 'Domains' },
   { href: '/features', label: 'Features' },
   { href: '/configuration', label: 'Configuration' },
+  { href: '/users', label: 'Users' },
 ];
 
 export function TenantTabs({ tenantId }: { tenantId: string }) {
@@ -21,7 +22,7 @@ export function TenantTabs({ tenantId }: { tenantId: string }) {
     >
       {TABS.map((tab) => {
         const href = `${base}${tab.href}`;
-        const active = pathname === href;
+        const active = tab.href === '' ? pathname === href : pathname.startsWith(href);
         return (
           <Link
             key={tab.label}

@@ -46,17 +46,17 @@ The backend is **ESM** (NestJS 12 is ESM-only), so relative imports use `.js` su
 
 ## Shared packages
 
-| Package         | Phase 1 contents                                                                          |
-| --------------- | ----------------------------------------------------------------------------------------- |
-| `constants`     | App name, `/api/v1` prefix, health path, request-id header, dev ports                     |
-| `types`         | `HealthResponse`, `ApiErrorResponse`, `AppEnvironment`                                    |
-| `validation`    | zod plus env primitives (`originListSchema`, `portSchema`, `logLevelSchema`)              |
-| `utils`         | `joinUrl`, `assertNever`, `isNonEmptyString`                                              |
-| `api-client`    | `createApiClient({ baseUrl, getHeaders })`, `ApiError`, `health()`                        |
-| `web-ui`        | Unbranded `AppShell`, `Card`, `Button` (Tailwind classes)                                 |
-| `mobile-ui`     | Unbranded `Screen`, `Heading`, `BodyText`                                                 |
-| `permissions`   | Empty. Filled in Phase 3 (RBAC).                                                          |
-| `tenant-config` | Lifecycle rules, feature registry, configuration registry, tenant API contracts (Phase 2) |
+| Package         | Phase 1 contents                                                                                         |
+| --------------- | -------------------------------------------------------------------------------------------------------- |
+| `constants`     | App name, `/api/v1` prefix, health path, request-id header, dev ports                                    |
+| `types`         | `HealthResponse`, `ApiErrorResponse`, `AppEnvironment`, auth contracts (Phase 3)                         |
+| `validation`    | zod plus env primitives (`originListSchema`, `portSchema`, `logLevelSchema`)                             |
+| `utils`         | `joinUrl`, `assertNever`, `isNonEmptyString`                                                             |
+| `api-client`    | `createApiClient({ baseUrl, getHeaders })`, `ApiError`, auth/platform/tenant clients, BFF cookie helpers |
+| `web-ui`        | Unbranded `AppShell`, `Card`, `Button` (Tailwind classes)                                                |
+| `mobile-ui`     | Unbranded `Screen`, `Heading`, `BodyText`                                                                |
+| `permissions`   | RBAC registry: permissions, system roles, MFA/PIN/session policies (Phase 3)                             |
+| `tenant-config` | Lifecycle rules, feature registry, configuration registry, tenant API contracts (Phase 2)                |
 
 Packages compile with `tsc` to `dist/` (ESM + `.d.ts`). Run `pnpm build:packages` before
 typechecking or starting an app. The root `dev`, `typecheck` and `test` scripts do this
