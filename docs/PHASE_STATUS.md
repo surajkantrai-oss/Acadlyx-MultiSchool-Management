@@ -4,13 +4,29 @@
 | ----- | ---------------------------------------------------------- | ------------------------------------------- |
 | 1     | Project Foundation & Infrastructure                        | **COMPLETE** (2026-09-26)                   |
 | 2     | Multi-Tenancy & Platform Super Admin                       | **COMPLETE** (2026-09-26)                   |
-| 3     | Authentication, RBAC & Security                            | **COMPLETE — awaiting review** (2026-09-27) |
-| 4–15  | Later phases per project plan (15 = production deployment) | NOT STARTED                                 |
+| 3     | Authentication, RBAC & Security                            | **COMPLETE** (2026-09-27, commit `1366890`) |
+| 4     | School & Academic Configuration                            | **COMPLETE — awaiting review** (2026-09-27) |
+| 5–15  | Later phases per project plan (15 = production deployment) | NOT STARTED                                 |
+
+## Phase 4 verification (2026-09-27)
+
+Uncommitted, awaiting review. HEAD is still the Phase 3 commit `1366890`.
+
+| Check                                                                                                             | Result |
+| ----------------------------------------------------------------------------------------------------------------- | ------ |
+| Migration `phase_4_school_academic_configuration` applied; Phase 2/3 migrations unchanged; status OK              | PASS   |
+| Fresh-database replay (roles → 3 migrations → generate → RBAC sync → seed ×2 → backend tests)                     | PASS   |
+| Backend unit + e2e incl. academic API (RBAC, rules, A→B/B→C/C→A, IDOR, concurrency, audit) and RLS                | PASS   |
+| School Admin e2e (status + BFF auth + School Setup persistence, role gating, cross-school)                        | PASS   |
+| Platform Admin auth regression e2e                                                                                | PASS   |
+| Negative controls (app scoping off → RLS holds; BYPASSRLS client → tests fail; permission check off → tests fail) | PASS   |
+| format / lint / typecheck / build / mobile validate                                                               | PASS   |
+| Browser walkthrough as SCHOOL_A School Admin; SCHOOL_B shows none of SCHOOL_A's data                              | PASS   |
+| iOS regression (branding, PIN login, session restore, logout)                                                     | PASS   |
 
 ## Phase 3 verification (2026-09-27)
 
-Uncommitted, awaiting review. The committed HEAD is still the Phase 2 commit. Full command results
-are in the Phase 3 report.
+Committed as `1366890`. Full command results are in the Phase 3 report.
 
 | Check                                                                                   | Result |
 | --------------------------------------------------------------------------------------- | ------ |

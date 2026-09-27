@@ -21,8 +21,30 @@ import type {
 } from '@acadlyx/tenant-config';
 import { TENANT_KEY_HEADER } from '@acadlyx/tenant-config';
 import type {
+  AcademicSettings,
+  AcademicYear,
   ApiErrorResponse,
+  AssignGradeSubjectRequest,
   AuthResult,
+  Branch,
+  CreateAcademicYearRequest,
+  CreateBranchRequest,
+  CreateGradeRequest,
+  CreateSectionRequest,
+  CreateSubjectRequest,
+  Grade,
+  GradeSubject,
+  School,
+  SchoolSetupStatus,
+  Section,
+  SectionListQuery,
+  Subject,
+  UpdateAcademicYearRequest,
+  UpdateBranchRequest,
+  UpdateGradeRequest,
+  UpdateSchoolRequest,
+  UpdateSectionRequest,
+  UpdateSubjectRequest,
   AuthTokens,
   DeviceDescriptor,
   DeviceInfo,
@@ -132,6 +154,18 @@ export interface TenantUserListQuery {
 }
 
 type MfaFactor = { code: string } | { recoveryCode: string };
+
+const enc = encodeURIComponent;
+
+/** `?a=1&b=x` from defined scalar values (empty string when none). */
+function qs(query: Record<string, string | number | boolean | undefined>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== '') params.set(key, String(value));
+  }
+  const text = params.toString();
+  return text ? `?${text}` : '';
+}
 
 function toQuery(query: TenantListQuery | TenantUserListQuery): string {
   const params = new URLSearchParams();
@@ -261,6 +295,73 @@ export function createApiClient(options: ApiClientOptions) {
     },
 
     /** Authentication endpoints. `base` = 'platform/auth' or 'auth' (tenant, Host-resolved). */
+    /**
+     * School & academic configuration (Phase 4, tenant-scoped). The school is resolved by the API
+     * from the request's tenant (Host / tenant key) and session — never passed by the client.
+     */
+    academic: {
+      school: () => request<School>('GET', 'school'),
+      updateSchool: (body: UpdateSchoolRequest) => request<School>('PATCH', 'school', { body }),
+      setupStatus: () => request<SchoolSetupStatus>('GET', 'school/setup-status'),
+      settings: () => request<AcademicSettings>('GET', 'school/academic-settings'),
+      updateSettings: (body: Partial<AcademicSettings>) =>
+        request<AcademicSettings>('PATCH', 'school/academic-settings', { body }),
+
+      branches: (query: { q?: string; active?: boolean } = {}) =>
+        request<Branch[]>('GET', `branches${qs(query)}`),
+      createBranch: (body: CreateBranchRequest) => request<Branch>('POST', 'branches', { body }),
+      updateBranch: (id: string, body: UpdateBranchRequest) =>
+        request<Branch>('PATCH', `branches/${enc(id)}`, { body }),
+      branchAction: (id: string, action: 'activate' | 'deactivate' | 'set-primary') =>
+        request<Branch>('POST', `branches/${enc(id)}/${action}`),
+
+      academicYears: () => request<AcademicYear[]>('GET', 'academic-years'),
+      createAcademicYear: (body: CreateAcademicYearRequest) =>
+        request<AcademicYear>('POST', 'academic-years', { body }),
+      updateAcademicYear: (id: string, body: UpdateAcademicYearRequest) =>
+        request<AcademicYear>('PATCH', `academic-years/${enc(id)}`, { body }),
+      academicYearAction: (id: string, action: 'activate' | 'close' | 'set-current') =>
+        request<AcademicYear>('POST', `academic-years/${enc(id)}/${action}`),
+
+      grades: () => request<Grade[]>('GET', 'grades'),
+      createGrade: (body: CreateGradeRequest) => request<Grade>('POST', 'grades', { body }),
+      updateGrade: (id: string, body: UpdateGradeRequest) =>
+        request<Grade>('PATCH', `grades/${enc(id)}`, { body }),
+      gradeAction: (id: string, action: 'activate' | 'deactivate') =>
+        request<Grade>('POST', `grades/${enc(id)}/${action}`),
+      reorderGrades: (ids: string[]) => request<Grade[]>('PUT', 'grades/order', { body: { ids } }),
+      gradeSubjects: (gradeId: string) =>
+        request<GradeSubject[]>('GET', `grades/${enc(gradeId)}/subjects`),
+      assignGradeSubject: (
+        gradeId: string,
+        subjectId: string,
+        body: AssignGradeSubjectRequest = {},
+      ) =>
+        request<GradeSubject[]>('PUT', `grades/${enc(gradeId)}/subjects/${enc(subjectId)}`, {
+          body,
+        }),
+      removeGradeSubject: (gradeId: string, subjectId: string) =>
+        request<GradeSubject[]>('DELETE', `grades/${enc(gradeId)}/subjects/${enc(subjectId)}`),
+
+      sections: (query: SectionListQuery = {}) =>
+        request<Section[]>('GET', `sections${qs({ ...query })}`),
+      createSection: (body: CreateSectionRequest) => request<Section>('POST', 'sections', { body }),
+      updateSection: (id: string, body: UpdateSectionRequest) =>
+        request<Section>('PATCH', `sections/${enc(id)}`, { body }),
+      sectionAction: (id: string, action: 'activate' | 'deactivate') =>
+        request<Section>('POST', `sections/${enc(id)}/${action}`),
+      reorderSections: (body: Required<SectionListQuery> & { ids: string[] }) =>
+        request<Section[]>('PUT', 'sections/order', { body }),
+
+      subjects: (query: { q?: string; active?: boolean } = {}) =>
+        request<Subject[]>('GET', `subjects${qs(query)}`),
+      createSubject: (body: CreateSubjectRequest) => request<Subject>('POST', 'subjects', { body }),
+      updateSubject: (id: string, body: UpdateSubjectRequest) =>
+        request<Subject>('PATCH', `subjects/${enc(id)}`, { body }),
+      subjectAction: (id: string, action: 'activate' | 'deactivate') =>
+        request<Subject>('POST', `subjects/${enc(id)}/${action}`),
+    },
+
     auth: (base: 'platform/auth' | 'auth', context: TenantRequestContext = {}) => {
       const headers: Record<string, string> = {};
       if (context.host) headers.host = context.host;

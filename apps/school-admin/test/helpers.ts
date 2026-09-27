@@ -3,6 +3,7 @@
  * Fixtures are written directly with the platform/owner role (DATABASE_URL); cleanup hard-deletes
  * by key prefix. Never used by the application.
  */
+import { createHmac } from 'node:crypto';
 import http from 'node:http';
 import argon2 from 'argon2';
 import { Redis } from 'ioredis';
@@ -84,6 +85,13 @@ export async function purge(client: pg.Client, prefix: string): Promise<void> {
   ).rows.map((r) => r.id);
   if (ids.length === 0) return;
   for (const table of [
+    'grade_subjects',
+    'sections',
+    'subjects',
+    'grades',
+    'academic_years',
+    'branches',
+    'schools',
     'audit_logs',
     'platform_audit_logs',
     'otp_challenges',
@@ -122,6 +130,11 @@ export async function createSchool(
     [input.key, slug, input.name, input.status],
   );
   const id = rows[0]?.id ?? '';
+  // Phase 4: every tenant owns its academic School (provisioned with the tenant).
+  await client.query(
+    "INSERT INTO schools (id, tenant_id, name, timezone, working_days, updated_at) VALUES (gen_random_uuid(), $1, $2, 'Asia/Kolkata', '{MONDAY,TUESDAY,WEDNESDAY,THURSDAY,FRIDAY}', now())",
+    [id, input.name],
+  );
   await client.query(
     "INSERT INTO tenant_domains (id, tenant_id, domain, type, is_primary, updated_at) VALUES (gen_random_uuid(), $1, $2, 'ADMIN', true, now())",
     [id, input.domain],
@@ -174,4 +187,36 @@ export async function resetRateLimits(): Promise<void> {
   } finally {
     redis.disconnect();
   }
+}
+
+/** A minimal cookie jar applying Set-Cookie updates (deletions included). */
+export class Jar {
+  private readonly cookies = new Map<string, string>();
+  apply(setCookies: string[]): void {
+    for (const line of setCookies) {
+      const [pair = ''] = line.split(';');
+      const eq = pair.indexOf('=');
+      const name = pair.slice(0, eq);
+      const value = pair.slice(eq + 1);
+      if (value === '' || /Max-Age=0/i.test(line)) this.cookies.delete(name);
+      else this.cookies.set(name, value);
+    }
+  }
+  header(): string {
+    return [...this.cookies].map(([n, v]) => `${n}=${v}`).join('; ');
+  }
+}
+
+/** RFC 6238 TOTP (SHA-1, 6 digits, 30 s) — what an authenticator app computes. */
+export function totp(base32Secret: string, at = Date.now()): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = '';
+  for (const ch of base32Secret.replace(/=+$/, '').toUpperCase())
+    bits += alphabet.indexOf(ch).toString(2).padStart(5, '0');
+  const key = Buffer.from(bits.match(/.{8}/g)?.map((b) => parseInt(b, 2)) ?? []);
+  const counter = Buffer.alloc(8);
+  counter.writeBigUInt64BE(BigInt(Math.floor(at / 1000 / 30)));
+  const mac = createHmac('sha1', key).update(counter).digest();
+  const offset = (mac[mac.length - 1] ?? 0) & 0x0f;
+  return String((mac.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).padStart(6, '0');
 }

@@ -123,3 +123,30 @@ describe('web BFF helpers', () => {
     expect(cookieName('acx_rt', false)).toBe('acx_rt');
   });
 });
+
+describe('academic client (Phase 4)', () => {
+  it('builds tenant-scoped paths with encoded ids and query strings, never a tenant id', async () => {
+    const calls: { method: string; url: string; body: string | null }[] = [];
+    const fake = ((url: string, init: RequestInit) => {
+      calls.push({ method: init.method ?? 'GET', url, body: (init.body as string | null) ?? null });
+      return Promise.resolve(new Response('[]', { status: 200 }));
+    }) as typeof fetch;
+    const api = createApiClient({ baseUrl: 'http://api.test/api/v1', fetch: fake });
+    await api.academic.branches({ q: 'north campus', active: true });
+    await api.academic.sections({ gradeId: 'g/1' });
+    await api.academic.assignGradeSubject('g1', 's1', { isRequired: false });
+    await api.academic.reorderGrades(['a', 'b']);
+    await api.academic.academicYearAction('y1', 'set-current');
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      'GET http://api.test/api/v1/branches?q=north+campus&active=true',
+      'GET http://api.test/api/v1/sections?gradeId=g%2F1',
+      'PUT http://api.test/api/v1/grades/g1/subjects/s1',
+      'PUT http://api.test/api/v1/grades/order',
+      'POST http://api.test/api/v1/academic-years/y1/set-current',
+    ]);
+    expect(calls[2]?.body).toBe('{"isRequired":false}');
+    expect(calls.some((c) => c.url.includes('tenant') || (c.body ?? '').includes('tenant'))).toBe(
+      false,
+    );
+  });
+});

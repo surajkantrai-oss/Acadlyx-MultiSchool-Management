@@ -56,6 +56,7 @@ model Tenant {
   configurations TenantConfiguration[]
   users          User[]
   auditLogs      AuditLog[]
+  schools        School[]
 
   @@index([status])
   @@map("tenants")
@@ -541,4 +542,239 @@ model PlatformAuditLog {
   @@index([tenantId])
   @@index([actorPlatformUserId])
   @@map("platform_audit_logs")
+}
+
+// =============================================================================================
+// Phase 4 — school & academic configuration.
+//
+// Tenant (SaaS customer) → School (academic institution; V1 exactly one per tenant, schema allows
+// more) → Branch (campus), AcademicYear, Grade (permanent catalogue), Subject → Section (a grade at
+// one branch for one academic year) and GradeSubject (which subjects a grade offers).
+// Every table carries tenant_id and school_id; composite (id, school_id, tenant_id) foreign keys
+// make cross-tenant AND cross-school links impossible at the database level. Normal
+// administration deactivates (is_active) instead of deleting: later phases reference these ids.
+// See docs/architecture/SCHOOL_ACADEMIC_MODEL.md.
+// =============================================================================================
+
+enum SchoolBoard {
+  CBSE
+  ICSE
+  STATE_BOARD
+  IB
+  CAMBRIDGE
+  OTHER
+
+  @@map("school_board")
+}
+
+enum Weekday {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+
+  @@map("weekday")
+}
+
+/// PLANNED → ACTIVE → CLOSED (one-way). Only an ACTIVE year may be current.
+enum AcademicYearStatus {
+  PLANNED
+  ACTIVE
+  CLOSED
+
+  @@map("academic_year_status")
+}
+
+/// Academic/business identity of a school. White-label branding stays on TenantBranding.
+model School {
+  id                     String       @id @default(uuid(7)) @db.Uuid
+  tenantId               String       @map("tenant_id") @db.Uuid
+  name                   String       @db.VarChar(160)
+  shortName              String?      @map("short_name") @db.VarChar(40)
+  /// Upper-case internal code, unique within the tenant (partial unique index). Not an identifier.
+  code                   String?      @db.VarChar(20)
+  board                  SchoolBoard?
+  /// Only when board = OTHER (CHECK).
+  boardName              String?      @map("board_name") @db.VarChar(100)
+  email                  String?      @db.VarChar(254)
+  phone                  String?      @db.VarChar(20)
+  website                String?      @db.VarChar(2048)
+  addressLine1           String?      @map("address_line1") @db.VarChar(200)
+  addressLine2           String?      @map("address_line2") @db.VarChar(200)
+  city                   String?      @db.VarChar(100)
+  state                  String?      @db.VarChar(100)
+  postalCode             String?      @map("postal_code") @db.VarChar(12)
+  /// ISO 3166-1 alpha-2.
+  country                String?      @db.Char(2)
+  // ---- Academic settings (school-level behaviour; typed columns, not a JSON bag) ----
+  /// Default IANA time zone for new branches.
+  timezone               String       @db.VarChar(64)
+  weekStartDay           Weekday      @default(MONDAY) @map("week_start_day")
+  workingDays            Weekday[]    @map("working_days")
+  academicYearStartMonth Int          @default(4) @map("academic_year_start_month") @db.SmallInt
+  createdAt              DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  branches      Branch[]
+  academicYears AcademicYear[]
+  grades        Grade[]
+  subjects      Subject[]
+
+  @@unique([id, tenantId])
+  @@index([tenantId])
+  @@map("schools")
+}
+
+model Branch {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  schoolId     String   @map("school_id") @db.Uuid
+  name         String   @db.VarChar(120)
+  /// Upper-case, unique within the school.
+  code         String   @db.VarChar(20)
+  email        String?  @db.VarChar(254)
+  phone        String?  @db.VarChar(20)
+  addressLine1 String?  @map("address_line1") @db.VarChar(200)
+  addressLine2 String?  @map("address_line2") @db.VarChar(200)
+  city         String?  @db.VarChar(100)
+  state        String?  @db.VarChar(100)
+  postalCode   String?  @map("postal_code") @db.VarChar(12)
+  country      String?  @db.Char(2)
+  /// Effective IANA time zone of this campus (stored explicitly, never inferred from the server).
+  timezone     String   @db.VarChar(64)
+  /// Exactly one primary per school once any branch exists (partial unique index + service).
+  isPrimary    Boolean  @default(false) @map("is_primary")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  school   School    @relation(fields: [schoolId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  sections Section[]
+
+  @@unique([schoolId, code])
+  @@unique([id, schoolId, tenantId])
+  @@index([tenantId, schoolId])
+  @@map("branches")
+}
+
+model AcademicYear {
+  id        String             @id @default(uuid(7)) @db.Uuid
+  tenantId  String             @map("tenant_id") @db.Uuid
+  schoolId  String             @map("school_id") @db.Uuid
+  name      String             @db.VarChar(40)
+  /// Date-only (no time zone). start < end; ranges never overlap within a school (EXCLUDE).
+  startDate DateTime           @map("start_date") @db.Date
+  endDate   DateTime           @map("end_date") @db.Date
+  status    AcademicYearStatus @default(PLANNED)
+  /// At most one per school (partial unique index); only when ACTIVE (CHECK).
+  isCurrent Boolean            @default(false) @map("is_current")
+  createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  school   School    @relation(fields: [schoolId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  sections Section[]
+
+  @@unique([schoolId, name])
+  @@unique([id, schoolId, tenantId])
+  @@index([tenantId, schoolId])
+  @@map("academic_years")
+}
+
+/// Permanent grade/class catalogue of a school (not versioned per year).
+model Grade {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  schoolId     String   @map("school_id") @db.Uuid
+  name         String   @db.VarChar(60)
+  code         String   @db.VarChar(20)
+  /// Explicit order (Nursery, LKG, Grade 1 … Grade 12) — never alphabetical. Unique per school
+  /// (deferrable constraint so a reorder can permute values inside one transaction).
+  displayOrder Int      @map("display_order")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  school        School         @relation(fields: [schoolId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  sections      Section[]
+  gradeSubjects GradeSubject[]
+
+  @@unique([schoolId, code])
+  @@unique([id, schoolId, tenantId])
+  @@index([tenantId, schoolId])
+  @@map("grades")
+}
+
+/// A grade's section at one branch for one academic year, e.g. Grade 5 · A · Main Campus · 2026–27.
+model Section {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  schoolId       String   @map("school_id") @db.Uuid
+  branchId       String   @map("branch_id") @db.Uuid
+  academicYearId String   @map("academic_year_id") @db.Uuid
+  gradeId        String   @map("grade_id") @db.Uuid
+  name           String   @db.VarChar(40)
+  code           String   @db.VarChar(20)
+  displayOrder   Int      @map("display_order")
+  /// Optional; > 0 when set.
+  capacity       Int?
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  branch       Branch       @relation(fields: [branchId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  academicYear AcademicYear @relation(fields: [academicYearId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  grade        Grade        @relation(fields: [gradeId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+
+  @@unique([branchId, academicYearId, gradeId, code])
+  @@unique([id, schoolId, tenantId])
+  @@index([tenantId, gradeId])
+  @@index([tenantId, branchId, academicYearId])
+  @@index([academicYearId, schoolId, tenantId])
+  @@index([gradeId, schoolId, tenantId])
+  @@index([branchId, schoolId, tenantId])
+  @@map("sections")
+}
+
+model Subject {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  schoolId  String   @map("school_id") @db.Uuid
+  name      String   @db.VarChar(100)
+  code      String   @db.VarChar(20)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  school        School         @relation(fields: [schoolId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  gradeSubjects GradeSubject[]
+
+  @@unique([schoolId, code])
+  @@unique([id, schoolId, tenantId])
+  @@index([tenantId, schoolId])
+  @@map("subjects")
+}
+
+/// Which subjects a grade offers. A mapping row (not historical data), so it may be removed.
+model GradeSubject {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  schoolId     String   @map("school_id") @db.Uuid
+  gradeId      String   @map("grade_id") @db.Uuid
+  subjectId    String   @map("subject_id") @db.Uuid
+  isRequired   Boolean  @default(true) @map("is_required")
+  displayOrder Int      @default(0) @map("display_order")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  grade   Grade   @relation(fields: [gradeId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  subject Subject @relation(fields: [subjectId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+
+  @@unique([gradeId, subjectId])
+  @@index([tenantId, gradeId])
+  @@index([subjectId, schoolId, tenantId])
+  @@map("grade_subjects")
 }

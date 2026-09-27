@@ -147,6 +147,15 @@ DEV_SEED_PASSWORD='<12+ chars>' DEV_SEED_PIN='<6 digits>' pnpm db:seed   # dev s
 There are no default credentials. OTP codes (activation and recovery) go to a development
 outbox in Redis (`OTP_DELIVERY=dev`); production without a real provider fails closed.
 
+### School setup (Phase 4)
+
+Signed-in Principals and School Admins configure the school at
+http://school-a.localhost:4002/settings/school: profile, branches (campuses), academic years,
+grades and sections, subjects and academic settings. Teachers and other staff see read-only
+views according to their permissions. The seed adds a fictional structure to each demo school.
+See [docs/architecture/SCHOOL_ACADEMIC_MODEL.md](docs/architecture/SCHOOL_ACADEMIC_MODEL.md)
+and [docs/api/ACADEMIC_CONFIGURATION.md](docs/api/ACADEMIC_CONFIGURATION.md).
+
 ## Quality
 
 ```bash

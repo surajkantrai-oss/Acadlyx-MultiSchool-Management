@@ -41,6 +41,13 @@ export async function purgeTenants(prisma: PlatformPrismaService, prefix: string
     prisma.mfaMethod.deleteMany({ where: byTenant }),
     prisma.userRole.deleteMany({ where: byTenant }),
     prisma.user.deleteMany({ where: byTenant }),
+    prisma.gradeSubject.deleteMany({ where: byTenant }),
+    prisma.section.deleteMany({ where: byTenant }),
+    prisma.subject.deleteMany({ where: byTenant }),
+    prisma.grade.deleteMany({ where: byTenant }),
+    prisma.academicYear.deleteMany({ where: byTenant }),
+    prisma.branch.deleteMany({ where: byTenant }),
+    prisma.school.deleteMany({ where: byTenant }),
     prisma.tenantConfiguration.deleteMany({ where }),
     prisma.tenantFeature.deleteMany({ where }),
     prisma.tenantBranding.deleteMany({ where }),
@@ -96,4 +103,27 @@ export async function setStatus(
     where: { id: tenantId },
     data: { status, archivedAt: status === 'ARCHIVED' ? new Date() : null },
   });
+}
+
+/**
+ * Provisions the academic School of each fixture tenant (what TenantsService.create and the
+ * Phase 4 migration backfill do for real tenants). Returns school ids by letter.
+ */
+export async function createFixtureSchools(
+  prisma: PlatformPrismaService,
+  tenants: Record<FixtureLetter, FixtureTenant>,
+): Promise<Record<FixtureLetter, string>> {
+  const result = {} as Record<FixtureLetter, string>;
+  for (const letter of FIXTURE_LETTERS) {
+    const school = await prisma.school.create({
+      data: {
+        tenantId: tenants[letter].id,
+        name: `Test School ${letter}`,
+        timezone: 'Asia/Kolkata',
+        workingDays: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'],
+      },
+    });
+    result[letter] = school.id;
+  }
+  return result;
 }

@@ -39,6 +39,49 @@ export const PERMISSION_REGISTRY = [
     scope: 'TENANT',
     description: "View the school's enabled features and settings",
   },
+  // Phase 4 — school & academic configuration.
+  { key: 'school.read', scope: 'TENANT', description: 'View the school profile' },
+  { key: 'school.manage', scope: 'TENANT', description: 'Edit the school profile' },
+  { key: 'branch.read', scope: 'TENANT', description: 'View branches/campuses' },
+  {
+    key: 'branch.manage',
+    scope: 'TENANT',
+    description: 'Create, edit, (de)activate branches and set the primary branch',
+  },
+  { key: 'academic_year.read', scope: 'TENANT', description: 'View academic years' },
+  {
+    key: 'academic_year.manage',
+    scope: 'TENANT',
+    description: 'Create, edit, activate, close and set the current academic year',
+  },
+  { key: 'grade.read', scope: 'TENANT', description: 'View grades/classes' },
+  {
+    key: 'grade.manage',
+    scope: 'TENANT',
+    description: 'Create, edit, reorder and (de)activate grades',
+  },
+  { key: 'section.read', scope: 'TENANT', description: 'View sections' },
+  {
+    key: 'section.manage',
+    scope: 'TENANT',
+    description: 'Create, edit, reorder and (de)activate sections',
+  },
+  { key: 'subject.read', scope: 'TENANT', description: 'View subjects and grade–subject mappings' },
+  {
+    key: 'subject.manage',
+    scope: 'TENANT',
+    description: 'Create, edit, (de)activate subjects and assign them to grades',
+  },
+  {
+    key: 'academic_configuration.read',
+    scope: 'TENANT',
+    description: 'View academic settings (week, working days, defaults)',
+  },
+  {
+    key: 'academic_configuration.manage',
+    scope: 'TENANT',
+    description: 'Edit academic settings',
+  },
 ] as const satisfies readonly { key: string; scope: AuthScope; description: string }[];
 
 export type PermissionKey = (typeof PERMISSION_REGISTRY)[number]['key'];
@@ -70,6 +113,33 @@ interface RoleDefinition {
 
 const TENANT_WORKSPACE: readonly PermissionKey[] = ['tenant.workspace.access'];
 
+/** Phase 4: full school & academic configuration (leadership/administration). */
+const ACADEMIC_MANAGE: readonly PermissionKey[] = [
+  'school.read',
+  'school.manage',
+  'branch.read',
+  'branch.manage',
+  'academic_year.read',
+  'academic_year.manage',
+  'grade.read',
+  'grade.manage',
+  'section.read',
+  'section.manage',
+  'subject.read',
+  'subject.manage',
+  'academic_configuration.read',
+  'academic_configuration.manage',
+];
+
+/** Phase 4: read-only academic structure needed by staff in later modules. */
+const ACADEMIC_STRUCTURE_READ: readonly PermissionKey[] = [
+  'school.read',
+  'branch.read',
+  'academic_year.read',
+  'grade.read',
+  'section.read',
+];
+
 export const ROLE_REGISTRY = [
   {
     key: 'PLATFORM_ADMIN',
@@ -90,7 +160,7 @@ export const ROLE_REGISTRY = [
     key: 'PRINCIPAL',
     name: 'Principal',
     scope: 'TENANT',
-    permissions: ['tenant.workspace.access', 'tenant.settings.read'],
+    permissions: ['tenant.workspace.access', 'tenant.settings.read', ...ACADEMIC_MANAGE],
     mfaRequired: true,
     pinAllowed: false,
     sessionPolicy: 'PRIVILEGED',
@@ -100,7 +170,7 @@ export const ROLE_REGISTRY = [
     key: 'SCHOOL_ADMIN',
     name: 'School Admin',
     scope: 'TENANT',
-    permissions: ['tenant.workspace.access', 'tenant.settings.read'],
+    permissions: ['tenant.workspace.access', 'tenant.settings.read', ...ACADEMIC_MANAGE],
     mfaRequired: true,
     pinAllowed: false,
     sessionPolicy: 'PRIVILEGED',
@@ -110,7 +180,7 @@ export const ROLE_REGISTRY = [
     key: 'ACCOUNTANT',
     name: 'Accountant',
     scope: 'TENANT',
-    permissions: TENANT_WORKSPACE,
+    permissions: [...TENANT_WORKSPACE, ...ACADEMIC_STRUCTURE_READ],
     mfaRequired: true,
     pinAllowed: false,
     sessionPolicy: 'PRIVILEGED',
@@ -120,7 +190,7 @@ export const ROLE_REGISTRY = [
     key: 'TEACHER',
     name: 'Teacher',
     scope: 'TENANT',
-    permissions: TENANT_WORKSPACE,
+    permissions: [...TENANT_WORKSPACE, ...ACADEMIC_STRUCTURE_READ, 'subject.read'],
     mfaRequired: false,
     pinAllowed: false,
     sessionPolicy: 'STAFF',
@@ -130,7 +200,7 @@ export const ROLE_REGISTRY = [
     key: 'ADMISSION_OFFICER',
     name: 'Admission Officer',
     scope: 'TENANT',
-    permissions: TENANT_WORKSPACE,
+    permissions: [...TENANT_WORKSPACE, ...ACADEMIC_STRUCTURE_READ],
     mfaRequired: false,
     pinAllowed: false,
     sessionPolicy: 'STAFF',
@@ -140,7 +210,7 @@ export const ROLE_REGISTRY = [
     key: 'TRANSPORT_MANAGER',
     name: 'Transport Manager',
     scope: 'TENANT',
-    permissions: TENANT_WORKSPACE,
+    permissions: [...TENANT_WORKSPACE, 'school.read', 'branch.read'],
     mfaRequired: false,
     pinAllowed: false,
     sessionPolicy: 'STAFF',

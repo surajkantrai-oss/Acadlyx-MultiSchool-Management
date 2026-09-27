@@ -5,13 +5,16 @@ import { COOKIE, trustedMutation } from '@/lib/server/session';
 
 /**
  * School-scoped API proxy for client components. Forwards the browser's Host (tenant resolution)
- * and the session bearer token. Only self-service auth + public OTP-start endpoints are reachable;
- * token-producing steps use dedicated cookie-managing routes.
+ * and the session bearer token. Only self-service auth, public OTP-start and the Phase 4 school
+ * setup endpoints are reachable; token-producing steps use dedicated cookie-managing routes.
  */
 const ALLOWED: RegExp[] = [
   /^auth\/(me|sessions(\/[\w-]+)?|devices(\/[\w-]+)?|credentials\/change|identifiers\/change\/(start|verify)|mfa\/totp\/remove|mfa\/recovery-codes\/regenerate)$/,
   /^auth\/(activation|recovery)\/start$/,
   /^tenant\/(workspace|settings)$/,
+  // Phase 4 — school & academic configuration (permissions enforced by the API).
+  /^school(\/(setup-status|academic-settings))?$/,
+  /^(branches|academic-years|grades|sections|subjects)(\/[\w-]+){0,3}$/,
 ];
 
 async function forward(
@@ -29,7 +32,7 @@ async function forward(
   const token = req.cookies.get(COOKIE.access)?.value;
   const hasBody = !['GET', 'HEAD'].includes(req.method);
   const upstream = await hostForwardingFetch(
-    `${appConfig.apiBaseUrl.replace(/\/+$/, '')}/${joined}`,
+    `${appConfig.apiBaseUrl.replace(/\/+$/, '')}/${joined}${req.nextUrl.search}`,
     {
       method: req.method,
       headers: {
@@ -53,4 +56,4 @@ async function forward(
   });
 }
 
-export { forward as GET, forward as POST, forward as DELETE };
+export { forward as GET, forward as POST, forward as PUT, forward as PATCH, forward as DELETE };

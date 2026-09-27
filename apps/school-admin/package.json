@@ -16,6 +16,7 @@
   "dependencies": {
     "@acadlyx/api-client": "workspace:*",
     "@acadlyx/constants": "workspace:*",
+    "@acadlyx/permissions": "workspace:*",
     "@acadlyx/tenant-config": "workspace:*",
     "@acadlyx/types": "workspace:*",
     "@acadlyx/validation": "workspace:*",

@@ -3,6 +3,7 @@ import { Card } from '@acadlyx/web-ui';
 import Link from 'next/link';
 import { BrandedFrame } from '@/components/branded-frame';
 import { SchoolLogin } from '@/components/school-login';
+import { SetupSummary } from '@/components/setup/setup-summary';
 import { SignOutButton } from '@/components/sign-out-button';
 import { TenantProblem } from '@/components/tenant-problem';
 import { requireSchool } from '@/lib/school-page';
@@ -12,7 +13,8 @@ export const dynamic = 'force-dynamic';
 
 /**
  * School home. Tenant resolution first (404/403 as in Phase 2); then either the branded sign-in
- * (no session) or the authenticated Phase 3 shell (identity, roles, school). No module screens yet.
+ * (no session) or the authenticated shell (identity, roles, school) with the Phase 4 school-setup
+ * summary for users who may read the school structure. Real counts only — no invented metrics.
  */
 export default async function HomePage() {
   const tenant = await requireSchool();
@@ -42,11 +44,18 @@ export default async function HomePage() {
 
   const { me } = session;
   const labels = new Map(FEATURE_REGISTRY.map((f) => [f.key as string, f.label]));
+  const canSetup = me.permissions.includes('school.read');
+  const setup = canSetup ? await session.api.academic.setupStatus().catch(() => null) : null;
   return (
     <BrandedFrame
       tenant={tenant}
       nav={
         <>
+          {canSetup ? (
+            <Link href="/settings/school" className="text-white/90 hover:text-white">
+              School setup
+            </Link>
+          ) : null}
           <Link href="/security" className="text-white/90 hover:text-white">
             Security
           </Link>
@@ -55,6 +64,7 @@ export default async function HomePage() {
       }
     >
       <h1 className="text-2xl font-semibold tracking-tight">Welcome, {me.displayName}</h1>
+      {setup ? <SetupSummary status={setup} /> : null}
       <div className="grid gap-4 sm:grid-cols-3">
         <Card title="Signed in as">
           <p data-testid="me-name">{me.displayName}</p>
@@ -82,7 +92,7 @@ export default async function HomePage() {
               'No modules enabled yet'}
           </p>
           <p className="mt-2 text-xs text-slate-400">
-            Module screens are delivered in later phases.
+            Student, attendance and other module screens are delivered in later phases.
           </p>
         </Card>
       </div>

@@ -8,10 +8,10 @@
 
 ## Roles
 
-| Role          | Used by                                                                       | Privileges                                                                                |
-| ------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `acadlyx`     | Migrations, `PlatformPrismaService` (Platform Admin, tenant resolution), seed | Schema owner, `CREATEDB`, **BYPASSRLS**                                                   |
-| `acadlyx_app` | `TenantPrismaService` only (`DATABASE_APP_URL`)                               | `SELECT` on `tenants`; `SELECT/INSERT/UPDATE/DELETE` on tenant child tables; RLS enforced |
+| Role          | Used by                                                                       | Privileges                                                                                                    |
+| ------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `acadlyx`     | Migrations, `PlatformPrismaService` (Platform Admin, tenant resolution), seed | Schema owner, `CREATEDB`, **BYPASSRLS**                                                                       |
+| `acadlyx_app` | `TenantPrismaService` only (`DATABASE_APP_URL`)                               | `SELECT` on `tenants`; per-table least-privilege grants on tenant tables (Phase 3/4 migrations); RLS enforced |
 
 Roles are created once by a superuser with `apps/backend/prisma/setup-roles.sql`, because role
 creation and BYPASSRLS cannot run inside migrations. The migration grants table privileges to
@@ -36,6 +36,33 @@ creation and BYPASSRLS cannot run inside migrations. The migration grants table 
 
 The SQL is Prisma-generated DDL plus a reviewed hand-written section (constraints, RLS, grants).
 Prisma does not model RLS or partial indexes; `prisma migrate diff` reports no drift.
+
+### `20260926165455_phase_3_authentication_rbac_security`
+
+Identity, RBAC, sessions, MFA, OTP and audit tables. See
+[../security/AUTHENTICATION.md](../security/AUTHENTICATION.md).
+
+### `20260927042714_phase_4_school_academic_configuration`
+
+Model: [../architecture/SCHOOL_ACADEMIC_MODEL.md](../architecture/SCHOOL_ACADEMIC_MODEL.md).
+
+| Kind               | Objects                                                                                                                                                                                   |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Extension          | `btree_gist` (trusted; used by the academic-year exclusion constraint)                                                                                                                    |
+| Enums              | `school_board`, `weekday`, `academic_year_status` (PLANNED, ACTIVE, CLOSED)                                                                                                               |
+| Tables             | `schools`, `branches`, `academic_years`, `grades`, `sections`, `subjects`, `grade_subjects`                                                                                               |
+| Composite keys/FKs | `UNIQUE (id, school_id, tenant_id)` on parents; children reference `(…_id, school_id, tenant_id)`; `schools (id, tenant_id)`; every FK **ON DELETE RESTRICT**                             |
+| Unique             | codes per school (branches, grades, subjects), year name per school, section code per (branch, year, grade), `grade_subjects (grade_id, subject_id)`, partial `schools (tenant_id, code)` |
+| Partial unique     | one primary branch per school; one current academic year per school                                                                                                                       |
+| Deferrable unique  | `grades (school_id, display_order)`, `sections (branch_id, academic_year_id, grade_id, display_order)`                                                                                    |
+| Exclusion          | `academic_years_no_overlap` — `(school_id WITH =, daterange(start_date, end_date, '[]') WITH &&)`                                                                                         |
+| CHECK              | upper-case code format, start < end, current ⇒ ACTIVE, primary ⇒ active, capacity > 0, display_order ≥ 0, board_name only for OTHER, ISO country, start month 1–12, ≥ 1 working day       |
+| RLS                | ENABLE + FORCE on all 7 tables; `tenant_isolation` FOR ALL TO `acadlyx_app`                                                                                                               |
+| Grants             | SELECT all; INSERT all except `schools`; column-level UPDATE (no id/tenant/school/scope columns); DELETE only on `grade_subjects`                                                         |
+| Backfill           | One School per existing tenant (name from branding, defaults from tenant configuration)                                                                                                   |
+
+Migrations are immutable once applied to a persistent database. Corrections go in a new
+migration.
 
 ## Rules for future models (blueprint §3.3, §10.6)
 
@@ -67,6 +94,10 @@ Prisma does not model RLS or partial indexes; `prisma migrate diff` reports no d
 3. Prefer expand-and-contract changes (add, backfill, switch, then remove later) so the running
    version keeps working during a deploy.
 4. Take a backup or snapshot before any migration that changes or drops data.
+5. **Required extension (Phase 4+):** the PostgreSQL server must provide `btree_gist` (bundled
+   with standard PostgreSQL contrib and available on Amazon RDS/Aurora). The Phase 4 migration
+   runs `CREATE EXTENSION IF NOT EXISTS btree_gist` as the database owner (trusted extension, no
+   superuser needed) for the academic-year no-overlap exclusion constraint.
 
 ## Local database
 

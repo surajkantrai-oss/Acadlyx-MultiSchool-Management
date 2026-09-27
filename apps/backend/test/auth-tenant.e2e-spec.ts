@@ -1,3 +1,4 @@
+import { permissionsForRoles } from '@acadlyx/permissions';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { AuthResult, AuthTokens, MeResponse, SessionInfo } from '@acadlyx/types';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -160,7 +161,11 @@ describe('Tenant authentication (e2e)', () => {
       const me = (await api('A', tokens.accessToken).get('/api/v1/auth/me').expect(200))
         .body as MeResponse;
       expect(me.roles).toEqual(['PARENT', 'TEACHER']);
-      expect(me.permissions).toEqual(['tenant.workspace.access']);
+      // Union of both roles' permissions, resolved server-side from the registry (Phase 4 adds
+      // teachers' read-only academic structure); PARENT adds nothing beyond the workspace.
+      expect(me.permissions).toEqual(permissionsForRoles(['TEACHER', 'PARENT']));
+      expect(me.permissions).toEqual(permissionsForRoles(['TEACHER']));
+      expect(me.permissions.some((p) => p.endsWith('.manage'))).toBe(false);
       expect(me.pinAllowed).toBe(false); // TEACHER forbids PIN → most restrictive wins
       const session = await prisma.session.findUniqueOrThrow({ where: { id: tokens.sessionId } });
       const days = (session.absoluteExpiresAt.getTime() - session.createdAt.getTime()) / 86_400_000;

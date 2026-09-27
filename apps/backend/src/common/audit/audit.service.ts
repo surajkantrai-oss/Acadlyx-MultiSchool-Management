@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import type { Owner } from '../../auth/core/owner.js';
 import { PlatformPrismaService } from '../../database/platform-prisma.service.js';
 import type { Prisma } from '../../generated/prisma/client.js';
+import { TenantContext } from '../../tenancy/tenant-context.js';
 import { TenantPrismaService } from '../../tenancy/tenant-prisma.service.js';
 import { RequestContext } from '../request-context.js';
 
@@ -94,6 +95,38 @@ export class AuditService {
             userAgent: meta.userAgent,
             changedFields: event.changedFields ?? [],
             metadata: toJson({ ...event.metadata, subjectUserId: subject.userId }),
+          },
+        }),
+      );
+    } catch (error) {
+      this.logger.error(`Audit write failed for ${event.action}: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Tenant-scope business action by the authenticated school user (Phase 4+: school & academic
+   * configuration). Written to audit_logs on the tenant path (RLS) for the current tenant.
+   */
+  async recordTenant(event: AuditEvent): Promise<void> {
+    const actor = this.actor(event);
+    const meta = RequestContext.meta();
+    const tenantId = TenantContext.getTenantId();
+    this.mirror({ ...event, tenantId }, actor.label);
+    try {
+      await this.tenant.run((tx) =>
+        tx.auditLog.create({
+          data: {
+            tenantId,
+            actorUserId: actor.userId ?? null,
+            actorLabel: actor.label,
+            action: event.action,
+            resourceType: event.resourceType,
+            resourceId: event.resourceId ?? null,
+            requestId: meta.requestId,
+            ipAddress: meta.ip,
+            userAgent: meta.userAgent,
+            changedFields: event.changedFields ?? [],
+            ...(event.metadata ? { metadata: toJson(event.metadata) } : {}),
           },
         }),
       );

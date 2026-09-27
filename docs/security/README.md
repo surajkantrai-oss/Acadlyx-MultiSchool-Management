@@ -10,7 +10,9 @@ authentication, MFA, RBAC and session management:
   web BFF cookies and CSRF, and mobile secure storage.
 
 Every API route is protected by the global `AccessGuard` and fails closed without a declared
-policy.
+policy. Phase 4 academic tables follow the same layers (permission per route, TenantContext,
+`acadlyx_app` + scoping, FORCE RLS) plus composite `(id, school_id, tenant_id)` foreign keys —
+see [../architecture/SCHOOL_ACADEMIC_MODEL.md](../architecture/SCHOOL_ACADEMIC_MODEL.md).
 
 | Control            | Implementation                                                                                                                                           |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |

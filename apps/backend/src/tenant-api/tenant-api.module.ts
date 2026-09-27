@@ -3,6 +3,8 @@ import { TenantAuthService } from '../auth/tenant/tenant-auth.service.js';
 import { RequestContextMiddleware } from '../common/request-context.middleware.js';
 import { TenancyModule } from '../tenancy/tenancy.module.js';
 import { TenantResolutionMiddleware } from '../tenancy/tenant-resolution.middleware.js';
+import { ACADEMIC_CONTROLLERS } from './academic/academic.controllers.js';
+import { ACADEMIC_PROVIDERS } from './academic/academic.providers.js';
 import { TenantAuthController } from './tenant-auth.controller.js';
 import { TenantBootstrapController } from './tenant-bootstrap.controller.js';
 import { TenantWorkspaceController } from './tenant-workspace.controller.js';
@@ -12,6 +14,7 @@ const TENANT_CONTROLLERS = [
   TenantBootstrapController,
   TenantAuthController,
   TenantWorkspaceController,
+  ...ACADEMIC_CONTROLLERS,
 ];
 
 /**
@@ -22,7 +25,7 @@ const TENANT_CONTROLLERS = [
 @Module({
   imports: [TenancyModule],
   controllers: TENANT_CONTROLLERS,
-  providers: [TenantAuthService],
+  providers: [TenantAuthService, ...ACADEMIC_PROVIDERS],
 })
 export class TenantApiModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

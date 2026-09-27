@@ -1,4 +1,4 @@
-# RBAC (Phase 3)
+# RBAC (Phases 3–4)
 
 Source of truth: `packages/permissions/src/index.ts`. At startup the backend syncs the registry
 into `roles`, `permissions` and `role_permissions`. The sync runs under a PostgreSQL advisory
@@ -7,28 +7,38 @@ Permissions are resolved server-side on every request and are never placed in th
 
 ## Permissions
 
-| Key                           | Scope    | Meaning                                      |
-| ----------------------------- | -------- | -------------------------------------------- |
-| `platform.tenant.read`        | PLATFORM | View schools and their configuration         |
-| `platform.tenant.manage`      | PLATFORM | Create and configure schools                 |
-| `platform.tenant_user.read`   | PLATFORM | View school user accounts                    |
-| `platform.tenant_user.manage` | PLATFORM | Create school users, manage roles and status |
-| `tenant.workspace.access`     | TENANT   | Open the authenticated school workspace      |
-| `tenant.settings.read`        | TENANT   | View the school's features and settings      |
+| Key                                       | Scope    | Meaning                                       |
+| ----------------------------------------- | -------- | --------------------------------------------- |
+| `platform.tenant.read`                    | PLATFORM | View schools and their configuration          |
+| `platform.tenant.manage`                  | PLATFORM | Create and configure schools                  |
+| `platform.tenant_user.read`               | PLATFORM | View school user accounts                     |
+| `platform.tenant_user.manage`             | PLATFORM | Create school users, manage roles and status  |
+| `tenant.workspace.access`                 | TENANT   | Open the authenticated school workspace       |
+| `tenant.settings.read`                    | TENANT   | View the school's features and settings       |
+| `school.read` / `school.manage`           | TENANT   | View / edit the school profile (Phase 4)      |
+| `branch.read` / `branch.manage`           | TENANT   | View / manage branches, primary branch        |
+| `academic_year.read` / `.manage`          | TENANT   | View / manage academic years and current year |
+| `grade.read` / `grade.manage`             | TENANT   | View / manage and reorder grades              |
+| `section.read` / `section.manage`         | TENANT   | View / manage and reorder sections            |
+| `subject.read` / `subject.manage`         | TENANT   | View / manage subjects and grade mappings     |
+| `academic_configuration.read` / `.manage` | TENANT   | View / edit academic settings                 |
 
-## Roles (system roles; no custom roles in Phase 3)
+## Roles (system roles; no custom roles yet)
 
-| Role              | Scope    | Permissions                     | MFA      | PIN | Session policy |
-| ----------------- | -------- | ------------------------------- | -------- | --- | -------------- |
-| PLATFORM_ADMIN    | PLATFORM | all four `platform.*`           | required | no  | PLATFORM       |
-| PRINCIPAL         | TENANT   | workspace.access, settings.read | required | no  | PRIVILEGED     |
-| SCHOOL_ADMIN      | TENANT   | workspace.access, settings.read | required | no  | PRIVILEGED     |
-| ACCOUNTANT        | TENANT   | workspace.access                | required | no  | PRIVILEGED     |
-| TEACHER           | TENANT   | workspace.access                | optional | no  | STAFF          |
-| ADMISSION_OFFICER | TENANT   | workspace.access                | optional | no  | STAFF          |
-| TRANSPORT_MANAGER | TENANT   | workspace.access                | optional | no  | STAFF          |
-| PARENT            | TENANT   | workspace.access                | optional | yes | FAMILY         |
-| STUDENT           | TENANT   | workspace.access                | optional | yes | FAMILY         |
+"Structure read" = `school.read`, `branch.read`, `academic_year.read`, `grade.read`,
+`section.read` (Phase 4).
+
+| Role              | Scope    | Permissions                                                     | MFA      | PIN | Session policy |
+| ----------------- | -------- | --------------------------------------------------------------- | -------- | --- | -------------- |
+| PLATFORM_ADMIN    | PLATFORM | all four `platform.*`                                           | required | no  | PLATFORM       |
+| PRINCIPAL         | TENANT   | workspace.access, settings.read, **all 14 Phase 4** permissions | required | no  | PRIVILEGED     |
+| SCHOOL_ADMIN      | TENANT   | workspace.access, settings.read, **all 14 Phase 4** permissions | required | no  | PRIVILEGED     |
+| ACCOUNTANT        | TENANT   | workspace.access, structure read                                | required | no  | PRIVILEGED     |
+| TEACHER           | TENANT   | workspace.access, structure read, `subject.read`                | optional | no  | STAFF          |
+| ADMISSION_OFFICER | TENANT   | workspace.access, structure read                                | optional | no  | STAFF          |
+| TRANSPORT_MANAGER | TENANT   | workspace.access, `school.read`, `branch.read`                  | optional | no  | STAFF          |
+| PARENT            | TENANT   | workspace.access                                                | optional | yes | FAMILY         |
+| STUDENT           | TENANT   | workspace.access                                                | optional | yes | FAMILY         |
 
 A user may hold several roles (for example TEACHER + PARENT). The effective permissions are the
 union of the roles' permissions. The **most restrictive** policy wins for MFA (required if any
@@ -58,3 +68,11 @@ These are independent. Future module routes will require **both** the tenant fea
 
 Add to `PERMISSION_REGISTRY`, grant in `ROLE_REGISTRY`, and protect the route with
 `@RequirePermission('…')`. Startup sync persists the change. Never check role keys in handlers.
+
+## Phase 4 grants — rationale
+
+Only Principal and School Admin manage the academic structure. Staff get the read access later
+modules need (accountants for fee structures by grade/section, admission officers for class
+allocation, teachers also for subjects), and no role other than leadership can read or change
+academic settings. Parents and students have no access to school-configuration APIs.
+Platform permissions are never granted to tenant roles (tested in `@acadlyx/permissions`).

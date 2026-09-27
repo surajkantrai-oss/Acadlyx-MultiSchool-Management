@@ -30,3 +30,4 @@ export interface ApiErrorResponse {
 }
 
 export * from './auth.js';
+export * from './academic.js';

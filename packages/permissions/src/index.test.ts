@@ -41,11 +41,35 @@ describe('RBAC registry', () => {
   });
 
   it('unions permissions for multi-role users', () => {
-    expect(permissionsForRoles(['TEACHER', 'PARENT'])).toEqual(['tenant.workspace.access']);
-    expect(permissionsForRoles(['TEACHER', 'PRINCIPAL'])).toEqual([
-      'tenant.settings.read',
-      'tenant.workspace.access',
-    ]);
+    expect(permissionsForRoles(['PARENT'])).toEqual(['tenant.workspace.access']);
+    const teacherParent = permissionsForRoles(['TEACHER', 'PARENT']);
+    expect(teacherParent).toEqual(permissionsForRoles(['TEACHER']));
+    expect(permissionsForRoles(['TEACHER', 'PRINCIPAL'])).toEqual(
+      permissionsForRoles(['PRINCIPAL']),
+    );
+  });
+
+  it('grants Phase 4 academic permissions without over-granting', () => {
+    const manage = PERMISSION_REGISTRY.map((p) => p.key).filter((k) => k.endsWith('.manage'));
+    const tenantManage = manage.filter((k) => !k.startsWith('platform.'));
+    expect(tenantManage).toHaveLength(7);
+    for (const role of ['PRINCIPAL', 'SCHOOL_ADMIN']) {
+      expect(permissionsForRoles([role])).toEqual(expect.arrayContaining(tenantManage));
+    }
+    for (const role of ['ACCOUNTANT', 'TEACHER', 'ADMISSION_OFFICER', 'TRANSPORT_MANAGER']) {
+      expect(permissionsForRoles([role]).filter((k) => k.endsWith('.manage'))).toEqual([]);
+    }
+    expect(permissionsForRoles(['TEACHER'])).toEqual(
+      expect.arrayContaining(['grade.read', 'section.read', 'subject.read']),
+    );
+    expect(permissionsForRoles(['TRANSPORT_MANAGER'])).not.toContain('grade.read');
+    for (const role of ['PARENT', 'STUDENT']) {
+      expect(permissionsForRoles([role])).toEqual(['tenant.workspace.access']);
+    }
+    // No tenant role holds a platform permission.
+    for (const role of TENANT_ROLE_KEYS) {
+      expect(permissionsForRoles([role]).some((k) => k.startsWith('platform.'))).toBe(false);
+    }
   });
 
   it('applies the most restrictive MFA, PIN and session rules', () => {

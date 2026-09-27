@@ -49,13 +49,13 @@ The backend is **ESM** (NestJS 12 is ESM-only), so relative imports use `.js` su
 | Package         | Phase 1 contents                                                                                         |
 | --------------- | -------------------------------------------------------------------------------------------------------- |
 | `constants`     | App name, `/api/v1` prefix, health path, request-id header, dev ports                                    |
-| `types`         | `HealthResponse`, `ApiErrorResponse`, `AppEnvironment`, auth contracts (Phase 3)                         |
-| `validation`    | zod plus env primitives (`originListSchema`, `portSchema`, `logLevelSchema`)                             |
+| `types`         | `HealthResponse`, `ApiErrorResponse`, `AppEnvironment`, auth and academic contracts                      |
+| `validation`    | zod, env primitives, tenant and academic schemas/patterns (shared by API DTOs and UI)                    |
 | `utils`         | `joinUrl`, `assertNever`, `isNonEmptyString`                                                             |
 | `api-client`    | `createApiClient({ baseUrl, getHeaders })`, `ApiError`, auth/platform/tenant clients, BFF cookie helpers |
 | `web-ui`        | Unbranded `AppShell`, `Card`, `Button` (Tailwind classes)                                                |
 | `mobile-ui`     | Unbranded `Screen`, `Heading`, `BodyText`                                                                |
-| `permissions`   | RBAC registry: permissions, system roles, MFA/PIN/session policies (Phase 3)                             |
+| `permissions`   | RBAC registry: permissions, system roles, MFA/PIN/session policies (Phases 3–4)                          |
 | `tenant-config` | Lifecycle rules, feature registry, configuration registry, tenant API contracts (Phase 2)                |
 
 Packages compile with `tsc` to `dist/` (ESM + `.d.ts`). Run `pnpm build:packages` before

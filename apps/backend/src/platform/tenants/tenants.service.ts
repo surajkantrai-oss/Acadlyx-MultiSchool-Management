@@ -1,5 +1,6 @@
 import {
   availableActions,
+  CONFIGURATION_REGISTRY,
   canTransition,
   isFeatureKey,
   TENANT_ERROR_CODES,
@@ -92,15 +93,31 @@ export class TenantsService {
   async create(dto: CreateTenantDto): Promise<TenantDetail> {
     const active = dto.initialStatus === 'ACTIVE';
     try {
-      const tenant = await this.prisma.tenant.create({
-        data: {
-          key: dto.key,
-          slug: dto.slug,
-          displayName: dto.displayName,
-          legalName: dto.legalName ?? null,
-          status: active ? 'ACTIVE' : 'DRAFT',
-          firstActivatedAt: active ? new Date() : null,
-        },
+      // Phase 4: every tenant owns its academic School from the start (V1: exactly one), created
+      // atomically with the tenant. School Admin then completes the profile and academic setup.
+      const tenant = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.tenant.create({
+          data: {
+            key: dto.key,
+            slug: dto.slug,
+            displayName: dto.displayName,
+            legalName: dto.legalName ?? null,
+            status: active ? 'ACTIVE' : 'DRAFT',
+            firstActivatedAt: active ? new Date() : null,
+          },
+        });
+        const school = await tx.school.create({
+          data: {
+            tenantId: created.id,
+            name: created.legalName ?? created.displayName,
+            timezone: CONFIGURATION_REGISTRY['general.timezone'].defaultValue,
+            weekStartDay: 'MONDAY',
+            workingDays: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'],
+            academicYearStartMonth:
+              CONFIGURATION_REGISTRY['general.academic_year_start_month'].defaultValue,
+          },
+        });
+        return { ...created, schoolId: school.id };
       });
       await this.audit.recordPlatform({
         action: 'TENANT_CREATED',
@@ -110,6 +127,13 @@ export class TenantsService {
         tenantKey: tenant.key,
         changedFields: Object.keys(dto),
         metadata: { status: tenant.status },
+      });
+      await this.audit.recordPlatform({
+        action: 'SCHOOL_PROVISIONED',
+        resourceType: 'school',
+        resourceId: tenant.schoolId,
+        tenantId: tenant.id,
+        tenantKey: tenant.key,
       });
       return await this.get(tenant.id);
     } catch (error) {

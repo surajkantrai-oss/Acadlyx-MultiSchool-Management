@@ -23,6 +23,14 @@ export const TENANT_SCOPED_MODELS: Readonly<Record<string, 'id' | 'tenantId'>> =
   MfaMethod: 'tenantId',
   MfaRecoveryCode: 'tenantId',
   AuditLog: 'tenantId',
+  // Phase 4 — school & academic configuration.
+  School: 'tenantId',
+  Branch: 'tenantId',
+  AcademicYear: 'tenantId',
+  Grade: 'tenantId',
+  Section: 'tenantId',
+  Subject: 'tenantId',
+  GradeSubject: 'tenantId',
 };
 
 /**

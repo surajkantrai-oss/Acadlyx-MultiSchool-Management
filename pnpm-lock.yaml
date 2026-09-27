@@ -299,6 +299,9 @@ importers:
       '@acadlyx/constants':
         specifier: workspace:*
         version: link:../../packages/constants
+      '@acadlyx/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@acadlyx/tenant-config':
         specifier: workspace:*
         version: link:../../packages/tenant-config
