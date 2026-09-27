@@ -20,7 +20,7 @@
     "build:platform-admin": "pnpm build:packages && pnpm --filter @acadlyx/platform-admin build",
     "build:school-admin": "pnpm build:packages && pnpm --filter @acadlyx/school-admin build",
     "validate:mobile": "pnpm build:packages && pnpm --filter @acadlyx/mobile validate",
-    "lint": "pnpm -r --if-present lint",
+    "lint": "pnpm build:packages && pnpm -r --if-present lint",
     "typecheck": "pnpm build:packages && pnpm -r --if-present typecheck",
     "test": "pnpm build:packages && pnpm -r --if-present test",
     "format": "prettier --write .",
