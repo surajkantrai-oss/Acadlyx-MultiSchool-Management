@@ -33,5 +33,9 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<NestE
   const app = moduleRef.createNestApplication<NestExpressApplication>({ bodyParser: false });
   configureApp(app);
   await app.init();
+  // Listen ONCE on an ephemeral loopback port for the app's lifetime. Otherwise supertest calls
+  // listen(0)/close() around every request, and under load a client can connect to a port that
+  // was just released and end up TCP-self-connected (seen as "Parse Error: Expected HTTP/").
+  await app.listen(0, '127.0.0.1');
   return app;
 }

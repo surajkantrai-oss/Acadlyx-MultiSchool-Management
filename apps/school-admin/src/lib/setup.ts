@@ -23,6 +23,7 @@ export const setupContext = cache(async () => {
     tenant: tenant as TenantBootstrap,
     me: session.me,
     academic: session.api.academic,
+    people: session.api.people,
     can: (permission: PermissionKey) => permissions.has(permission),
   } as const;
 });

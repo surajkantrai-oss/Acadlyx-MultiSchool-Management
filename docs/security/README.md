@@ -14,6 +14,22 @@ policy. Phase 4 academic tables follow the same layers (permission per route, Te
 `acadlyx_app` + scoping, FORCE RLS) plus composite `(id, school_id, tenant_id)` foreign keys —
 see [../architecture/SCHOOL_ACADEMIC_MODEL.md](../architecture/SCHOOL_ACADEMIC_MODEL.md).
 
+Phase 5 people tables add:
+
+- Composite FKs to `users (id, tenant_id)`, so a profile can never link another tenant's login.
+- The SECURITY DEFINER `app_create_profile_account`. It is tenant-bound, allows only
+  STUDENT/PARENT/TEACHER, and is the only user-insert path for `acadlyx_app`.
+- An append-only status history.
+- Import hardening:
+  - size and row limits
+  - a ZIP-bomb guard
+  - formula cells rejected
+  - CSV-injection-safe error reports
+  - raw files never stored
+  - a worker that re-resolves the tenant and runs under RLS
+
+See [../architecture/PEOPLE_AND_ENROLLMENT_MODEL.md](../architecture/PEOPLE_AND_ENROLLMENT_MODEL.md).
+
 | Control            | Implementation                                                                                                                                           |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Security headers   | helmet, with a `default-src 'none'` CSP for the JSON API; `x-powered-by` disabled                                                                        |

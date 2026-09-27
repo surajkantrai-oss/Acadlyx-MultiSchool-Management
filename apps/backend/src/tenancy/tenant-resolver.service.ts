@@ -53,6 +53,15 @@ export class TenantResolverService {
     return { outcome: 'not-found' };
   }
 
+  /**
+   * Resolution by tenant id for trusted server-side work that has no Host (Phase 5 background
+   * jobs). The id comes from a job this server enqueued — never from a client.
+   */
+  async resolveById(id: string): Promise<ResolvedTenant | undefined> {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id }, select: TENANT_SELECT });
+    return tenant ? toResolved(tenant) : undefined;
+  }
+
   private async byHost(domain: string | undefined): Promise<ResolvedTenant | undefined> {
     if (!domain) return undefined;
     const row = await this.prisma.tenantDomain.findUnique({

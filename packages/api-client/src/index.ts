@@ -21,6 +21,42 @@ import type {
 } from '@acadlyx/tenant-config';
 import { TENANT_KEY_HEADER } from '@acadlyx/tenant-config';
 import type {
+  ChangeStudentStatusRequest,
+  CreateAssignmentRequest,
+  CreatedAccount,
+  CreateEnrollmentRequest,
+  CreateParentRequest,
+  CreateStudentRequest,
+  CreateTeacherRequest,
+  EndEnrollmentRequest,
+  Enrollment,
+  ImportJob,
+  ImportRow,
+  ImportRowStatus,
+  ImportTemplate,
+  ImportType,
+  LinkGuardianRequest,
+  ParentDetail,
+  ParentSummary,
+  PeopleCounts,
+  PeopleQuery,
+  ProfileAccount,
+  ProfileKind,
+  StudentDetail,
+  StudentListQuery,
+  StudentSummary,
+  TeacherAssignment,
+  TeacherDetail,
+  TeacherListQuery,
+  TeacherSummary,
+  TeacherStatus,
+  TransferEnrollmentRequest,
+  UpdateGuardianRequest,
+  UpdateParentRequest,
+  UpdateStudentRequest,
+  UpdateTeacherRequest,
+} from '@acadlyx/types';
+import type {
   AcademicSettings,
   AcademicYear,
   ApiErrorResponse,
@@ -360,6 +396,91 @@ export function createApiClient(options: ApiClientOptions) {
         request<Subject>('PATCH', `subjects/${enc(id)}`, { body }),
       subjectAction: (id: string, action: 'activate' | 'deactivate') =>
         request<Subject>('POST', `subjects/${enc(id)}/${action}`),
+    },
+
+    /**
+     * People, enrollment and bulk onboarding (Phase 5, tenant-scoped). Lists are paginated
+     * server-side. File upload/download goes through the School Admin BFF (multipart/binary).
+     */
+    people: {
+      summary: () => request<PeopleCounts>('GET', 'people/summary'),
+
+      students: (query: StudentListQuery = {}) =>
+        request<Paginated<StudentSummary>>('GET', `students${qs({ ...query })}`),
+      student: (id: string) => request<StudentDetail>('GET', `students/${enc(id)}`),
+      createStudent: (body: CreateStudentRequest) =>
+        request<StudentDetail>('POST', 'students', { body }),
+      updateStudent: (id: string, body: UpdateStudentRequest) =>
+        request<StudentDetail>('PATCH', `students/${enc(id)}`, { body }),
+      changeStudentStatus: (id: string, body: ChangeStudentStatusRequest) =>
+        request<StudentDetail>('POST', `students/${enc(id)}/status`, { body }),
+      linkGuardian: (id: string, body: LinkGuardianRequest) =>
+        request<StudentDetail>('POST', `students/${enc(id)}/guardians`, { body }),
+      updateGuardian: (id: string, linkId: string, body: UpdateGuardianRequest) =>
+        request<StudentDetail>('PATCH', `students/${enc(id)}/guardians/${enc(linkId)}`, { body }),
+      unlinkGuardian: (id: string, linkId: string) =>
+        request<StudentDetail>('DELETE', `students/${enc(id)}/guardians/${enc(linkId)}`),
+      enrollments: (id: string) => request<Enrollment[]>('GET', `students/${enc(id)}/enrollments`),
+      enroll: (id: string, body: CreateEnrollmentRequest) =>
+        request<StudentDetail>('POST', `students/${enc(id)}/enrollments`, { body }),
+      transferEnrollment: (id: string, enrollmentId: string, body: TransferEnrollmentRequest) =>
+        request<StudentDetail>(
+          'POST',
+          `students/${enc(id)}/enrollments/${enc(enrollmentId)}/transfer`,
+          { body },
+        ),
+      endEnrollment: (id: string, enrollmentId: string, body: EndEnrollmentRequest) =>
+        request<StudentDetail>('POST', `students/${enc(id)}/enrollments/${enc(enrollmentId)}/end`, {
+          body,
+        }),
+
+      parents: (query: PeopleQuery = {}) =>
+        request<Paginated<ParentSummary>>('GET', `parents${qs({ ...query })}`),
+      parent: (id: string) => request<ParentDetail>('GET', `parents/${enc(id)}`),
+      createParent: (body: CreateParentRequest) =>
+        request<ParentDetail>('POST', 'parents', { body }),
+      updateParent: (id: string, body: UpdateParentRequest) =>
+        request<ParentDetail>('PATCH', `parents/${enc(id)}`, { body }),
+      setParentActive: (id: string, active: boolean) =>
+        request<ParentDetail>('POST', `parents/${enc(id)}/${active ? 'activate' : 'deactivate'}`),
+
+      teachers: (query: TeacherListQuery = {}) =>
+        request<Paginated<TeacherSummary>>('GET', `teachers${qs({ ...query })}`),
+      teacher: (id: string) => request<TeacherDetail>('GET', `teachers/${enc(id)}`),
+      createTeacher: (body: CreateTeacherRequest) =>
+        request<TeacherDetail>('POST', 'teachers', { body }),
+      updateTeacher: (id: string, body: UpdateTeacherRequest) =>
+        request<TeacherDetail>('PATCH', `teachers/${enc(id)}`, { body }),
+      setTeacherStatus: (id: string, status: TeacherStatus) =>
+        request<TeacherDetail>('POST', `teachers/${enc(id)}/status`, { body: { status } }),
+      assignments: (id: string, includeEnded = false) =>
+        request<TeacherAssignment[]>(
+          'GET',
+          `teachers/${enc(id)}/assignments${qs({ includeEnded: includeEnded || undefined })}`,
+        ),
+      assign: (id: string, body: CreateAssignmentRequest) =>
+        request<TeacherDetail>('POST', `teachers/${enc(id)}/assignments`, { body }),
+      endAssignment: (id: string, assignmentId: string) =>
+        request<TeacherDetail>('POST', `teachers/${enc(id)}/assignments/${enc(assignmentId)}/end`),
+
+      createAccount: (kind: ProfileKind, id: string) =>
+        request<CreatedAccount>('POST', `${kind}/${enc(id)}/account`),
+      linkAccount: (kind: ProfileKind, id: string, userId: string) =>
+        request<ProfileAccount>('POST', `${kind}/${enc(id)}/account/link`, { body: { userId } }),
+      issueActivationCode: (kind: ProfileKind, id: string) =>
+        request<CreatedAccount>('POST', `${kind}/${enc(id)}/account/activation-code`),
+
+      imports: (query: { page?: number; pageSize?: number } = {}) =>
+        request<Paginated<ImportJob>>('GET', `imports${qs(query)}`),
+      importJob: (id: string) => request<ImportJob>('GET', `imports/${enc(id)}`),
+      importRows: (
+        id: string,
+        query: { status?: ImportRowStatus; page?: number; pageSize?: number } = {},
+      ) => request<Paginated<ImportRow>>('GET', `imports/${enc(id)}/rows${qs(query)}`),
+      importTemplate: (type: ImportType) =>
+        request<ImportTemplate>('GET', `imports/templates/${type}`),
+      confirmImport: (id: string) => request<ImportJob>('POST', `imports/${enc(id)}/confirm`),
+      cancelImport: (id: string) => request<ImportJob>('POST', `imports/${enc(id)}/cancel`),
     },
 
     auth: (base: 'platform/auth' | 'auth', context: TenantRequestContext = {}) => {

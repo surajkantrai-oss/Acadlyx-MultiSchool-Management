@@ -14,6 +14,7 @@ export const SCHOOL_ADMIN_URL = new URL(process.env.SCHOOL_ADMIN_URL ?? 'http://
 export interface HttpResult {
   status: number;
   body: string;
+  bytes: Buffer;
   headers: http.IncomingHttpHeaders;
   setCookies: string[];
 }
@@ -22,17 +23,17 @@ export interface HttpResult {
 export function request(
   method: string,
   path: string,
-  opts: { host: string; headers?: Record<string, string>; body?: unknown },
+  opts: { host: string; headers?: Record<string, string>; body?: unknown; raw?: Buffer },
 ): Promise<HttpResult> {
   return new Promise((resolve, reject) => {
-    const payload = opts.body === undefined ? undefined : JSON.stringify(opts.body);
+    const payload = opts.raw ?? (opts.body === undefined ? undefined : JSON.stringify(opts.body));
     const req = http.request(
       new URL(path, SCHOOL_ADMIN_URL),
       {
         method,
         headers: {
           host: `${opts.host}:${SCHOOL_ADMIN_URL.port}`,
-          ...(payload ? { 'content-type': 'application/json' } : {}),
+          ...(payload && !opts.raw ? { 'content-type': 'application/json' } : {}),
           ...opts.headers,
         },
       },
@@ -44,6 +45,7 @@ export function request(
           resolve({
             status: res.statusCode ?? 0,
             body: Buffer.concat(chunks).toString('utf8').replaceAll('<!-- -->', ''),
+            bytes: Buffer.concat(chunks),
             headers: res.headers,
             setCookies: setCookie,
           });
@@ -85,6 +87,15 @@ export async function purge(client: pg.Client, prefix: string): Promise<void> {
   ).rows.map((r) => r.id);
   if (ids.length === 0) return;
   for (const table of [
+    'bulk_import_rows',
+    'bulk_import_jobs',
+    'teacher_assignments',
+    'student_enrollments',
+    'student_guardians',
+    'student_status_history',
+    'students',
+    'parents',
+    'teachers',
     'grade_subjects',
     'sections',
     'subjects',
@@ -219,4 +230,63 @@ export function totp(base32Secret: string, at = Date.now()): string {
   const mac = createHmac('sha1', key).update(counter).digest();
   const offset = (mac[mac.length - 1] ?? 0) & 0x0f;
   return String((mac.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).padStart(6, '0');
+}
+
+/** Academic structure for a fixture school (branch MAIN, ACTIVE year 2026–27, Grade 5 A/B, MATH mapped). */
+export async function createAcademic(
+  client: pg.Client,
+  tenantId: string,
+): Promise<{ sectionA: string; sectionB: string; mathId: string }> {
+  const one = async (sql: string, params: unknown[]) =>
+    (await client.query<{ id: string }>(sql, params)).rows[0]?.id ?? '';
+  const schoolId = await one('SELECT id FROM schools WHERE tenant_id = $1', [tenantId]);
+  const s = [tenantId, schoolId];
+  const branch = await one(
+    "INSERT INTO branches (id, tenant_id, school_id, name, code, timezone, is_primary, updated_at) VALUES (gen_random_uuid(), $1, $2, 'Main Campus', 'MAIN', 'Asia/Kolkata', true, now()) RETURNING id",
+    s,
+  );
+  const year = await one(
+    "INSERT INTO academic_years (id, tenant_id, school_id, name, start_date, end_date, status, is_current, updated_at) VALUES (gen_random_uuid(), $1, $2, '2026–27', '2026-04-01', '2027-03-31', 'ACTIVE', true, now()) RETURNING id",
+    s,
+  );
+  const grade = await one(
+    "INSERT INTO grades (id, tenant_id, school_id, name, code, display_order, updated_at) VALUES (gen_random_uuid(), $1, $2, 'Grade 5', 'G5', 0, now()) RETURNING id",
+    s,
+  );
+  const section = (code: string, order: number) =>
+    one(
+      'INSERT INTO sections (id, tenant_id, school_id, branch_id, academic_year_id, grade_id, name, code, display_order, updated_at) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $6, $7, now()) RETURNING id',
+      [...s, branch, year, grade, code, order],
+    );
+  const sectionA = await section('A', 0);
+  const sectionB = await section('B', 1);
+  const mathId = await one(
+    "INSERT INTO subjects (id, tenant_id, school_id, name, code, updated_at) VALUES (gen_random_uuid(), $1, $2, 'Mathematics', 'MATH', now()) RETURNING id",
+    s,
+  );
+  await client.query(
+    'INSERT INTO grade_subjects (id, tenant_id, school_id, grade_id, subject_id, updated_at) VALUES (gen_random_uuid(), $1, $2, $3, $4, now())',
+    [...s, grade, mathId],
+  );
+  return { sectionA, sectionB, mathId };
+}
+
+/** Multipart form body (single file field + text fields) for raw http requests. */
+export function multipart(
+  fields: Record<string, string>,
+  file: { name: string; content: Buffer; type: string },
+) {
+  const boundary = `----acadlyx${String(Date.now())}`;
+  const parts: Buffer[] = [];
+  for (const [k, v] of Object.entries(fields))
+    parts.push(
+      Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${v}\r\n`),
+    );
+  parts.push(
+    Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${file.name}"\r\nContent-Type: ${file.type}\r\n\r\n`,
+    ),
+  );
+  parts.push(file.content, Buffer.from(`\r\n--${boundary}--\r\n`));
+  return { body: Buffer.concat(parts), contentType: `multipart/form-data; boundary=${boundary}` };
 }

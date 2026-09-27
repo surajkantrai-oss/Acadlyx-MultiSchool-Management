@@ -327,6 +327,9 @@ model User {
   otpChallenges OtpChallenge[]
   mfaMethods    MfaMethod[]
   recoveryCodes MfaRecoveryCode[]
+  student       Student?
+  parent        Parent?
+  teacher       Teacher?
 
   @@unique([id, tenantId])
   @@index([tenantId, status])
@@ -618,11 +621,15 @@ model School {
   createdAt              DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt              DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   branches      Branch[]
   academicYears AcademicYear[]
   grades        Grade[]
   subjects      Subject[]
+  students      Student[]
+  parents       Parent[]
+  teachers      Teacher[]
+  importJobs    BulkImportJob[]
 
   @@unique([id, tenantId])
   @@index([tenantId])
@@ -725,12 +732,16 @@ model Section {
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  branch       Branch       @relation(fields: [branchId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
-  academicYear AcademicYear @relation(fields: [academicYearId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
-  grade        Grade        @relation(fields: [gradeId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  branch       Branch              @relation(fields: [branchId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  academicYear AcademicYear        @relation(fields: [academicYearId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  grade        Grade               @relation(fields: [gradeId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  enrollments  StudentEnrollment[]
+  assignments  TeacherAssignment[]
 
   @@unique([branchId, academicYearId, gradeId, code])
   @@unique([id, schoolId, tenantId])
+  /// Phase 5: lets an enrollment pin its denormalised academic_year_id to its section's year.
+  @@unique([id, academicYearId, schoolId, tenantId])
   @@index([tenantId, gradeId])
   @@index([tenantId, branchId, academicYearId])
   @@index([academicYearId, schoolId, tenantId])
@@ -749,8 +760,9 @@ model Subject {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  school        School         @relation(fields: [schoolId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  school        School              @relation(fields: [schoolId, tenantId], references: [id, tenantId], onDelete: Restrict)
   gradeSubjects GradeSubject[]
+  assignments   TeacherAssignment[]
 
   @@unique([schoolId, code])
   @@unique([id, schoolId, tenantId])
@@ -777,4 +789,336 @@ model GradeSubject {
   @@index([tenantId, gradeId])
   @@index([subjectId, schoolId, tenantId])
   @@map("grade_subjects")
+}
+
+// =============================================================================================
+// Phase 5 — people, enrollment and bulk onboarding.
+//
+// Profiles (Student, Parent, Teacher) are school-domain records, separate from the Phase 3 login
+// identity (User). A profile may exist without a login (user_id NULL); when linked, the composite
+// FK (user_id, tenant_id) keeps the User in the same tenant and user_id is unique per profile
+// kind. Every table carries tenant_id + school_id with composite FKs, so cross-tenant AND
+// cross-school links are impossible. See docs/architecture/PEOPLE_AND_ENROLLMENT_MODEL.md.
+// =============================================================================================
+
+/// ACTIVE ⇄ INACTIVE; ACTIVE/INACTIVE → WITHDRAWN | GRADUATED; WITHDRAWN → ACTIVE (re-admission).
+/// GRADUATED is terminal. Independent of the login account status.
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+  WITHDRAWN
+  GRADUATED
+
+  @@map("student_status")
+}
+
+enum TeacherStatus {
+  ACTIVE
+  INACTIVE
+
+  @@map("teacher_status")
+}
+
+enum GuardianRelationship {
+  FATHER
+  MOTHER
+  GUARDIAN
+  GRANDPARENT
+  SIBLING
+  OTHER
+
+  @@map("guardian_relationship")
+}
+
+/// At most one ACTIVE enrollment per student per academic year. Rows are never deleted.
+enum EnrollmentStatus {
+  ACTIVE
+  TRANSFERRED
+  WITHDRAWN
+  COMPLETED
+
+  @@map("enrollment_status")
+}
+
+enum TeacherAssignmentType {
+  SUBJECT_TEACHER
+  CLASS_TEACHER
+
+  @@map("teacher_assignment_type")
+}
+
+enum ImportType {
+  STUDENTS
+  PARENTS
+  TEACHERS
+
+  @@map("import_type")
+}
+
+/// READY (parsed + validated, awaiting confirmation) → QUEUED → PROCESSING → COMPLETED | FAILED;
+/// READY → CANCELLED.
+enum ImportStatus {
+  READY
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+
+  @@map("import_status")
+}
+
+/// INVALID rows are never processed; VALID → SUCCEEDED | FAILED once processed.
+enum ImportRowStatus {
+  INVALID
+  VALID
+  SUCCEEDED
+  FAILED
+
+  @@map("import_row_status")
+}
+
+model Student {
+  id              String        @id @default(uuid(7)) @db.Uuid
+  tenantId        String        @map("tenant_id") @db.Uuid
+  schoolId        String        @map("school_id") @db.Uuid
+  /// Optional login identity (same tenant; one Student profile per User).
+  userId          String?       @map("user_id") @db.Uuid
+  /// Trimmed, upper-case; unique within the school (not globally).
+  admissionNumber String        @map("admission_number") @db.VarChar(40)
+  firstName       String        @map("first_name") @db.VarChar(80)
+  middleName      String?       @map("middle_name") @db.VarChar(80)
+  lastName        String?       @map("last_name") @db.VarChar(80)
+  preferredName   String?       @map("preferred_name") @db.VarChar(80)
+  /// Date-only.
+  dateOfBirth     DateTime?     @map("date_of_birth") @db.Date
+  admissionDate   DateTime?     @map("admission_date") @db.Date
+  status          StudentStatus @default(ACTIVE)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  school        School                 @relation(fields: [schoolId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  user          User?                  @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  guardians     StudentGuardian[]
+  enrollments   StudentEnrollment[]
+  statusHistory StudentStatusHistory[]
+
+  /// One Student profile per login User (a user id belongs to exactly one tenant).
+  @@unique([userId, tenantId])
+  @@unique([schoolId, admissionNumber])
+  @@unique([id, schoolId, tenantId])
+  @@index([tenantId, schoolId, status])
+  @@index([schoolId, lastName, firstName])
+  @@map("students")
+}
+
+/// Append-only record of Student status changes (blueprint §10.4 StudentStatusHistory).
+model StudentStatusHistory {
+  id              String         @id @default(uuid(7)) @db.Uuid
+  tenantId        String         @map("tenant_id") @db.Uuid
+  schoolId        String         @map("school_id") @db.Uuid
+  studentId       String         @map("student_id") @db.Uuid
+  fromStatus      StudentStatus? @map("from_status")
+  toStatus        StudentStatus  @map("to_status")
+  reason          String?        @db.VarChar(200)
+  changedByUserId String?        @map("changed_by_user_id") @db.Uuid
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  student Student @relation(fields: [studentId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+
+  @@index([studentId, createdAt])
+  @@index([tenantId])
+  @@map("student_status_history")
+}
+
+model Parent {
+  id         String   @id @default(uuid(7)) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  schoolId   String   @map("school_id") @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
+  /// Optional school-unique import/dedup key (e.g. PAR-0001). Imports match parents ONLY by this.
+  parentCode String?  @map("parent_code") @db.VarChar(40)
+  firstName  String   @map("first_name") @db.VarChar(80)
+  middleName String?  @map("middle_name") @db.VarChar(80)
+  lastName   String?  @map("last_name") @db.VarChar(80)
+  /// Contact data only — NOT unique (families may share a phone/email). Login uniqueness is on User.
+  email      String?  @db.VarChar(254)
+  phone      String?  @db.VarChar(16)
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  school   School            @relation(fields: [schoolId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  user     User?             @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  children StudentGuardian[]
+
+  @@unique([userId, tenantId])
+  @@unique([id, schoolId, tenantId])
+  @@index([tenantId, schoolId])
+  @@index([schoolId, lastName, firstName])
+  @@index([schoolId, phone])
+  @@map("parents")
+}
+
+model StudentGuardian {
+  id                 String               @id @default(uuid(7)) @db.Uuid
+  tenantId           String               @map("tenant_id") @db.Uuid
+  schoolId           String               @map("school_id") @db.Uuid
+  studentId          String               @map("student_id") @db.Uuid
+  parentId           String               @map("parent_id") @db.Uuid
+  relationship       GuardianRelationship
+  /// At most one primary guardian per student (partial unique index).
+  isPrimary          Boolean              @default(false) @map("is_primary")
+  pickupAuthorized   Boolean              @default(false) @map("pickup_authorized")
+  isEmergencyContact Boolean              @default(false) @map("is_emergency_contact")
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  student Student @relation(fields: [studentId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  parent  Parent  @relation(fields: [parentId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+
+  @@unique([studentId, parentId])
+  @@index([parentId])
+  @@index([tenantId])
+  @@map("student_guardians")
+}
+
+model Teacher {
+  id          String        @id @default(uuid(7)) @db.Uuid
+  tenantId    String        @map("tenant_id") @db.Uuid
+  schoolId    String        @map("school_id") @db.Uuid
+  userId      String?       @map("user_id") @db.Uuid
+  /// Trimmed, upper-case; unique within the school.
+  employeeId  String        @map("employee_id") @db.VarChar(40)
+  firstName   String        @map("first_name") @db.VarChar(80)
+  middleName  String?       @map("middle_name") @db.VarChar(80)
+  lastName    String?       @map("last_name") @db.VarChar(80)
+  email       String?       @db.VarChar(254)
+  phone       String?       @db.VarChar(16)
+  joiningDate DateTime?     @map("joining_date") @db.Date
+  status      TeacherStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  school      School              @relation(fields: [schoolId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  user        User?               @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  assignments TeacherAssignment[]
+
+  @@unique([userId, tenantId])
+  @@unique([schoolId, employeeId])
+  @@unique([id, schoolId, tenantId])
+  @@index([tenantId, schoolId, status])
+  @@index([schoolId, lastName, firstName])
+  @@map("teachers")
+}
+
+/// A student's placement in a Section (which pins branch, year and grade). academic_year_id is
+/// denormalised for the one-ACTIVE-per-year rule and kept equal to the section's year by the
+/// composite FK (section_id, academic_year_id, school_id, tenant_id).
+model StudentEnrollment {
+  id             String           @id @default(uuid(7)) @db.Uuid
+  tenantId       String           @map("tenant_id") @db.Uuid
+  schoolId       String           @map("school_id") @db.Uuid
+  studentId      String           @map("student_id") @db.Uuid
+  sectionId      String           @map("section_id") @db.Uuid
+  academicYearId String           @map("academic_year_id") @db.Uuid
+  status         EnrollmentStatus @default(ACTIVE)
+  /// Date-only.
+  startDate      DateTime         @map("start_date") @db.Date
+  endDate        DateTime?        @map("end_date") @db.Date
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  student Student @relation(fields: [studentId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  section Section @relation(fields: [sectionId, academicYearId, schoolId, tenantId], references: [id, academicYearId, schoolId, tenantId], onDelete: Restrict)
+
+  @@index([studentId, academicYearId])
+  @@index([sectionId, status])
+  @@index([tenantId, academicYearId])
+  @@map("student_enrollments")
+}
+
+/// SUBJECT_TEACHER (subject required; must be mapped to the section's grade) or CLASS_TEACHER
+/// (no subject; at most one active per section). Ending sets ended_at — history is kept.
+model TeacherAssignment {
+  id        String                @id @default(uuid(7)) @db.Uuid
+  tenantId  String                @map("tenant_id") @db.Uuid
+  schoolId  String                @map("school_id") @db.Uuid
+  teacherId String                @map("teacher_id") @db.Uuid
+  sectionId String                @map("section_id") @db.Uuid
+  subjectId String?               @map("subject_id") @db.Uuid
+  type      TeacherAssignmentType
+  startedAt DateTime              @default(now()) @map("started_at") @db.Timestamptz(3)
+  endedAt   DateTime?             @map("ended_at") @db.Timestamptz(3)
+  createdAt DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  teacher Teacher  @relation(fields: [teacherId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  section Section  @relation(fields: [sectionId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  subject Subject? @relation(fields: [subjectId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+
+  @@index([teacherId, endedAt])
+  @@index([sectionId, endedAt])
+  @@index([subjectId])
+  @@index([tenantId])
+  @@map("teacher_assignments")
+}
+
+/// One upload. The original file is never stored — only normalised rows (bulk_import_rows).
+model BulkImportJob {
+  id               String       @id @default(uuid(7)) @db.Uuid
+  tenantId         String       @map("tenant_id") @db.Uuid
+  schoolId         String       @map("school_id") @db.Uuid
+  type             ImportType
+  status           ImportStatus @default(READY)
+  templateVersion  Int          @map("template_version") @db.SmallInt
+  originalFilename String       @map("original_filename") @db.VarChar(200)
+  /// SHA-256 of the uploaded bytes (duplicate-upload hint; file itself discarded).
+  fileHash         String       @map("file_hash") @db.Char(64)
+  totalRows        Int          @default(0) @map("total_rows")
+  validRows        Int          @default(0) @map("valid_rows")
+  invalidRows      Int          @default(0) @map("invalid_rows")
+  processedRows    Int          @default(0) @map("processed_rows")
+  succeededRows    Int          @default(0) @map("succeeded_rows")
+  failedRows       Int          @default(0) @map("failed_rows")
+  /// Safe, generic reason when the whole job FAILED (never raw errors).
+  failureReason    String?      @map("failure_reason") @db.VarChar(200)
+  createdByUserId  String       @map("created_by_user_id") @db.Uuid
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+  confirmedAt      DateTime?    @map("confirmed_at") @db.Timestamptz(3)
+  startedAt        DateTime?    @map("started_at") @db.Timestamptz(3)
+  completedAt      DateTime?    @map("completed_at") @db.Timestamptz(3)
+
+  school School          @relation(fields: [schoolId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  rows   BulkImportRow[]
+
+  @@unique([id, schoolId, tenantId])
+  @@index([tenantId, schoolId, createdAt])
+  @@index([tenantId, status])
+  @@map("bulk_import_jobs")
+}
+
+model BulkImportRow {
+  id          String          @id @default(uuid(7)) @db.Uuid
+  tenantId    String          @map("tenant_id") @db.Uuid
+  schoolId    String          @map("school_id") @db.Uuid
+  jobId       String          @map("job_id") @db.Uuid
+  /// Spreadsheet row number (header = row 1).
+  rowNumber   Int             @map("row_number")
+  status      ImportRowStatus
+  /// Normalised values needed to process the row; cleared once the row succeeded.
+  data        Json?
+  /// [{ field, code, message }] — never raw database errors.
+  errors      Json?
+  /// Created profile id once processed.
+  entityId    String?         @map("entity_id") @db.Uuid
+  processedAt DateTime?       @map("processed_at") @db.Timestamptz(3)
+
+  job BulkImportJob @relation(fields: [jobId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+
+  @@unique([jobId, rowNumber])
+  @@index([jobId, status])
+  @@index([tenantId])
+  @@map("bulk_import_rows")
 }

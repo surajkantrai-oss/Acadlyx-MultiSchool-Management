@@ -5,12 +5,29 @@
 | 1     | Project Foundation & Infrastructure                        | **COMPLETE** (2026-09-26)                   |
 | 2     | Multi-Tenancy & Platform Super Admin                       | **COMPLETE** (2026-09-26)                   |
 | 3     | Authentication, RBAC & Security                            | **COMPLETE** (2026-09-27, commit `1366890`) |
-| 4     | School & Academic Configuration                            | **COMPLETE — awaiting review** (2026-09-27) |
-| 5–15  | Later phases per project plan (15 = production deployment) | NOT STARTED                                 |
+| 4     | School & Academic Configuration                            | **COMPLETE** (2026-09-27, commit `acd41c5`) |
+| 5     | Students, Parents, Teachers & Bulk Onboarding              | **COMPLETE — awaiting review** (2026-09-27) |
+| 6–15  | Later phases per project plan (15 = production deployment) | NOT STARTED                                 |
+
+## Phase 5 verification (2026-09-27)
+
+Uncommitted, awaiting review. HEAD is `673f61d` (Phase 4 `acd41c5` + CI fixes).
+
+| Check                                                                                                                 | Result |
+| --------------------------------------------------------------------------------------------------------------------- | ------ |
+| Migration `phase_5_people_bulk_onboarding` applied; Phase 2/3/4 migrations unchanged; status OK                       | PASS   |
+| Fresh-database replay (roles → 4 migrations → generate → RBAC sync → seed ×2 → backend tests)                         | PASS   |
+| Backend unit + e2e: people API, accounts, enrollment, assignments, imports (queue, worker, retries, Redis outage)     | PASS   |
+| Direct RLS tests on the 9 Phase 5 tables (fail-closed, A→B/B→C/C→A, cross-school FKs, grants, invariants)             | PASS   |
+| School Admin e2e (people flow via BFF, multipart import → completion, template download, role gating, cross-school)   | PASS   |
+| Negative controls (app scoping off → RLS holds; permission check off → tests fail; identity checks off → DB FK holds) | PASS   |
+| format / lint / typecheck / build / mobile validate                                                                   | PASS   |
+| Browser walkthrough as SCHOOL_A School Admin; SCHOOL_B shows none of SCHOOL_A's people                                | PASS   |
+| iOS regression (branding, PIN login, session restore, logout)                                                         | PASS   |
 
 ## Phase 4 verification (2026-09-27)
 
-Uncommitted, awaiting review. HEAD is still the Phase 3 commit `1366890`.
+Committed as `acd41c5`.
 
 | Check                                                                                                             | Result |
 | ----------------------------------------------------------------------------------------------------------------- | ------ |

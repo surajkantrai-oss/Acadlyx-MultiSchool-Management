@@ -31,6 +31,16 @@ export const TENANT_SCOPED_MODELS: Readonly<Record<string, 'id' | 'tenantId'>> =
   Section: 'tenantId',
   Subject: 'tenantId',
   GradeSubject: 'tenantId',
+  // Phase 5 — people, enrollment and bulk onboarding.
+  Student: 'tenantId',
+  StudentStatusHistory: 'tenantId',
+  Parent: 'tenantId',
+  StudentGuardian: 'tenantId',
+  Teacher: 'tenantId',
+  StudentEnrollment: 'tenantId',
+  TeacherAssignment: 'tenantId',
+  BulkImportJob: 'tenantId',
+  BulkImportRow: 'tenantId',
 };
 
 /**

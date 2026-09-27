@@ -156,6 +156,17 @@ views according to their permissions. The seed adds a fictional structure to eac
 See [docs/architecture/SCHOOL_ACADEMIC_MODEL.md](docs/architecture/SCHOOL_ACADEMIC_MODEL.md)
 and [docs/api/ACADEMIC_CONFIGURATION.md](docs/api/ACADEMIC_CONFIGURATION.md).
 
+### People & bulk onboarding (Phase 5)
+
+http://school-a.localhost:4002/people manages students (with class placement, guardians and
+status), parents and teachers (with subject/class-teacher assignments), and bulk imports from
+CSV/XLSX templates (upload → preview → confirm → background processing on BullMQ). Accounts are
+never created by imports; **Create account** on a profile starts the normal activation flow.
+The seed adds fictional people to the demo schools. See
+[docs/architecture/PEOPLE_AND_ENROLLMENT_MODEL.md](docs/architecture/PEOPLE_AND_ENROLLMENT_MODEL.md),
+[docs/api/PEOPLE_ONBOARDING.md](docs/api/PEOPLE_ONBOARDING.md) and
+[docs/development/BULK_IMPORT.md](docs/development/BULK_IMPORT.md).
+
 ## Quality
 
 ```bash

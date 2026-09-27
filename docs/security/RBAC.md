@@ -1,4 +1,4 @@
-# RBAC (Phases 3–4)
+# RBAC (Phases 3–5)
 
 Source of truth: `packages/permissions/src/index.ts`. At startup the backend syncs the registry
 into `roles`, `permissions` and `role_permissions`. The sync runs under a PostgreSQL advisory
@@ -22,6 +22,13 @@ Permissions are resolved server-side on every request and are never placed in th
 | `section.read` / `section.manage`         | TENANT   | View / manage and reorder sections            |
 | `subject.read` / `subject.manage`         | TENANT   | View / manage subjects and grade mappings     |
 | `academic_configuration.read` / `.manage` | TENANT   | View / edit academic settings                 |
+| `student.read` / `student.manage`         | TENANT   | Student profiles, status, guardians (Phase 5) |
+| `parent.read` / `parent.manage`           | TENANT   | Parent profiles and contact details           |
+| `teacher.read` / `teacher.manage`         | TENANT   | Teacher profiles and status                   |
+| `enrollment.read` / `enrollment.manage`   | TENANT   | Class placement, transfer, end enrollment     |
+| `teacher_assignment.read` / `.manage`     | TENANT   | Subject / class-teacher assignments           |
+| `bulk_import.read` / `bulk_import.manage` | TENANT   | Import jobs (also needs `<type>.manage`)      |
+| `people_account.manage`                   | TENANT   | Create / link login accounts for profiles     |
 
 ## Roles (system roles; no custom roles yet)
 
@@ -76,3 +83,18 @@ modules need (accountants for fee structures by grade/section, admission officer
 allocation, teachers also for subjects), and no role other than leadership can read or change
 academic settings. Parents and students have no access to school-configuration APIs.
 Platform permissions are never granted to tenant roles (tested in `@acadlyx/permissions`).
+
+## Phase 5 grants — rationale
+
+| Role              | Phase 5 permissions                                                                                              |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------- |
+| PRINCIPAL         | all 13                                                                                                           |
+| SCHOOL_ADMIN      | all 13                                                                                                           |
+| ADMISSION_OFFICER | student, parent and enrollment read + manage; bulk_import read + manage (no teacher manage → no Teachers import) |
+| TEACHER           | student, parent, teacher, enrollment and teacher_assignment read                                                 |
+| ACCOUNTANT        | student.read, enrollment.read                                                                                    |
+| TRANSPORT_MANAGER | none (Phase 5)                                                                                                   |
+| PARENT, STUDENT   | none: family self-service views come in a later phase                                                            |
+
+`people_account.manage` is leadership-only, because it creates login identities. Guardian contact
+details in a student response are shown only to callers holding `parent.read`.

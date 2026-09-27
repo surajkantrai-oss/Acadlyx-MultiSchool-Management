@@ -24,7 +24,7 @@ structure justifies it.
 | `config/`   | Loads env, validates it with zod (`env.schema.ts`) and exposes the typed `AppConfigService` |
 | `database/` | `PrismaService` (Prisma 7 + `@prisma/adapter-pg`), lifecycle, health probe                  |
 | `cache/`    | `RedisService`, the shared ioredis connection, lifecycle and health probe                   |
-| `queue/`    | BullMQ root config (connection, `acadlyx` prefix, retry defaults). No queues yet.           |
+| `queue/`    | BullMQ root config (connection, `acadlyx` prefix, retry defaults). Phase 5: `bulk-import`   |
 | `health/`   | `GET /api/v1/health` returns 200/503 with application/database/redis status                 |
 | `logging/`  | nestjs-pino structured logs, request-id correlation, secret redaction                       |
 | `security/` | helmet headers, exact-match CORS, global rate-limit guard (throttler)                       |
@@ -102,5 +102,12 @@ See [MULTI_TENANCY.md](MULTI_TENANCY.md).
 | Module              | Responsibility                                                                      |
 | ------------------- | ----------------------------------------------------------------------------------- |
 | `tenancy/`          | Resolver, AsyncLocalStorage context, guard, tenant Prisma client and scoping        |
-| `tenant-api/`       | Tenant-scoped controllers (Phase 2: `GET /tenant/bootstrap`)                        |
+| `tenant-api/`       | Tenant-scoped controllers (bootstrap, academic, people, imports)                    |
 | `platform/tenants/` | Platform Admin APIs: tenants, lifecycle, domains, branding, features, configuration |
+
+## People & bulk onboarding (Phase 5)
+
+`tenant-api/people` (students, parents, teachers, enrollment, assignments, accounts) and
+`tenant-api/imports` (templates, parser, validator, BullMQ processor + runner). The worker runs
+in the API process and uses the same TenantContext + `TenantPrismaService` path as requests.
+See [PEOPLE_AND_ENROLLMENT_MODEL.md](PEOPLE_AND_ENROLLMENT_MODEL.md).

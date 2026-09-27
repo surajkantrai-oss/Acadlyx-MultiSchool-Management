@@ -9,16 +9,20 @@ export interface SetupLink {
 }
 
 /** School Setup section navigation (only links the user may open are passed in). */
-export function SetupNav({ links }: { links: SetupLink[] }) {
+export function SetupNav({
+  links,
+  label = 'School setup',
+}: {
+  links: SetupLink[];
+  label?: string;
+}) {
   const pathname = usePathname();
   return (
-    <nav aria-label="School setup" className="md:w-56 md:shrink-0">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-        School setup
-      </p>
+    <nav aria-label={label} className="md:w-56 md:shrink-0">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
       <ul className="flex flex-wrap gap-1 md:flex-col">
         {links.map((link) => {
-          const active = pathname === link.href;
+          const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
           return (
             <li key={link.href}>
               <Link

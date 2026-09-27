@@ -61,6 +61,27 @@ Model: [../architecture/SCHOOL_ACADEMIC_MODEL.md](../architecture/SCHOOL_ACADEMI
 | Grants             | SELECT all; INSERT all except `schools`; column-level UPDATE (no id/tenant/school/scope columns); DELETE only on `grade_subjects`                                                         |
 | Backfill           | One School per existing tenant (name from branding, defaults from tenant configuration)                                                                                                   |
 
+### `20260927100000_phase_5_people_bulk_onboarding`
+
+Model: [../architecture/PEOPLE_AND_ENROLLMENT_MODEL.md](../architecture/PEOPLE_AND_ENROLLMENT_MODEL.md).
+
+| Kind           | Objects                                                                                                                                                                                           |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Enums          | `student_status`, `teacher_status`, `guardian_relationship`, `enrollment_status`, `teacher_assignment_type`, `import_type`, `import_job_status`, `import_row_status`                              |
+| Tables         | `students`, `student_status_history`, `parents`, `student_guardians`, `teachers`, `student_enrollments`, `teacher_assignments`, `bulk_import_jobs`, `bulk_import_rows`                            |
+| Composite FKs  | `(…_id, school_id, tenant_id)` everywhere; profiles → `users (id, tenant_id)`; enrollments → `sections (id, academic_year_id, school_id, tenant_id)` (new unique on sections); ON DELETE RESTRICT |
+| Unique         | admission number / employee ID per school, `(user_id, tenant_id)` per profile kind, `student_guardians (student_id, parent_id)`                                                                   |
+| Partial unique | `parents_school_parent_code_key`, `student_guardians_one_primary`, `student_enrollments_one_active_per_year`, `teacher_assignments_active_subject_key`, `teacher_assignments_one_class_teacher`   |
+| CHECK          | upper-case ID formats, non-blank names, DOB in the past, lower-case emails, enrollment dates / ACTIVE ⇔ open, subject required iff SUBJECT_TEACHER, assignment period, import counters            |
+| RLS            | ENABLE + FORCE on all 9 tables; `tenant_isolation` FOR ALL TO `acadlyx_app`                                                                                                                       |
+| Grants         | SELECT/INSERT all; column-level UPDATE (no id/tenant/school/link columns); `student_status_history` append-only; DELETE only on `student_guardians`                                               |
+| Function       | `app_create_profile_account(…)` SECURITY DEFINER: tenant context required, only STUDENT/PARENT/TEACHER, inserts a PENDING user + role (no raw INSERT on `users`)                                  |
+
+**Drift note:** `prisma migrate diff` proposes dropping Phase 4's deferrable unique constraints
+(`grades (school_id, display_order)`, `sections (…, display_order)`), because Prisma cannot model
+`DEFERRABLE`. Those lines were removed from the generated SQL. Review this whenever a future
+migration is generated.
+
 Migrations are immutable once applied to a persistent database. Corrections go in a new
 migration.
 

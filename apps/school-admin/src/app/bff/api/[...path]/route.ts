@@ -15,7 +15,14 @@ const ALLOWED: RegExp[] = [
   // Phase 4 — school & academic configuration (permissions enforced by the API).
   /^school(\/(setup-status|academic-settings))?$/,
   /^(branches|academic-years|grades|sections|subjects)(\/[\w-]+){0,3}$/,
+  // Phase 5 — people, enrollment and bulk onboarding (permissions enforced by the API).
+  /^(students|parents|teachers)(\/[\w-]+){0,4}$/,
+  /^people\/summary$/,
+  /^imports(\/(templates\/(STUDENTS|PARENTS|TEACHERS)(\/file)?|[\w-]+(\/(rows|errors\.csv|confirm|cancel))?))?$/,
 ];
+
+/** Multipart uploads are forwarded byte-for-byte (the API parses and validates them). */
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024 + 64 * 1024;
 
 async function forward(
   req: NextRequest,
@@ -31,6 +38,25 @@ async function forward(
     return NextResponse.json({ message: 'Not found' }, { status: 404 });
   const token = req.cookies.get(COOKIE.access)?.value;
   const hasBody = !['GET', 'HEAD'].includes(req.method);
+  const incomingType = req.headers.get('content-type') ?? '';
+  const multipart = hasBody && incomingType.startsWith('multipart/form-data');
+  let body: string | Uint8Array<ArrayBuffer> | undefined;
+  if (multipart) {
+    const declared = Number(req.headers.get('content-length') ?? '0');
+    if (declared > MAX_UPLOAD_BYTES)
+      return NextResponse.json(
+        { code: 'IMPORT_FILE_TOO_LARGE', message: 'The file is larger than 5 MB' },
+        { status: 413 },
+      );
+    body = new Uint8Array(await req.arrayBuffer());
+    if (body.length > MAX_UPLOAD_BYTES)
+      return NextResponse.json(
+        { code: 'IMPORT_FILE_TOO_LARGE', message: 'The file is larger than 5 MB' },
+        { status: 413 },
+      );
+  } else if (hasBody) {
+    body = await req.text();
+  }
   const upstream = await hostForwardingFetch(
     `${appConfig.apiBaseUrl.replace(/\/+$/, '')}/${joined}${req.nextUrl.search}`,
     {
@@ -39,19 +65,22 @@ async function forward(
         host: req.headers.get('host') ?? '',
         accept: 'application/json',
         ...(token ? { authorization: `Bearer ${token}` } : {}),
-        ...(hasBody ? { 'content-type': 'application/json' } : {}),
+        ...(hasBody ? { 'content-type': multipart ? incomingType : 'application/json' } : {}),
         'user-agent': req.headers.get('user-agent') ?? '',
       },
-      ...(hasBody ? { body: await req.text() } : {}),
+      ...(body === undefined ? {} : { body }),
     },
   ).catch(() => null);
   if (!upstream) return NextResponse.json({ message: 'Service unavailable' }, { status: 502 });
-  const text = await upstream.text();
-  return new NextResponse(text.length > 0 ? text : null, {
+  // Bytes, not text: templates (.xlsx) and reports are binary-safe; filenames pass through.
+  const bytes = Buffer.from(await upstream.arrayBuffer());
+  const disposition = upstream.headers.get('content-disposition');
+  return new NextResponse(bytes.length > 0 ? bytes : null, {
     status: upstream.status,
     headers: {
       'content-type': upstream.headers.get('content-type') ?? 'application/json',
       'cache-control': 'no-store',
+      ...(disposition ? { 'content-disposition': disposition } : {}),
     },
   });
 }

@@ -7,6 +7,7 @@ export { z };
 
 export * from './tenant.js';
 export * from './academic.js';
+export * from './people.js';
 
 export const appEnvironmentSchema = z.enum(['development', 'test', 'staging', 'production']);
 

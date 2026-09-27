@@ -3,6 +3,7 @@ import { Card } from '@acadlyx/web-ui';
 import Link from 'next/link';
 import { BrandedFrame } from '@/components/branded-frame';
 import { SchoolLogin } from '@/components/school-login';
+import { PeopleSummary } from '@/components/people/people-summary';
 import { SetupSummary } from '@/components/setup/setup-summary';
 import { SignOutButton } from '@/components/sign-out-button';
 import { TenantProblem } from '@/components/tenant-problem';
@@ -46,11 +47,22 @@ export default async function HomePage() {
   const labels = new Map(FEATURE_REGISTRY.map((f) => [f.key as string, f.label]));
   const canSetup = me.permissions.includes('school.read');
   const setup = canSetup ? await session.api.academic.setupStatus().catch(() => null) : null;
+  const canPeople = ['student.read', 'parent.read', 'teacher.read', 'bulk_import.read'].some((p) =>
+    me.permissions.includes(p as (typeof me.permissions)[number]),
+  );
+  const people = me.permissions.includes('student.read')
+    ? await session.api.people.summary().catch(() => null)
+    : null;
   return (
     <BrandedFrame
       tenant={tenant}
       nav={
         <>
+          {canPeople ? (
+            <Link href="/people" className="text-white/90 hover:text-white">
+              People
+            </Link>
+          ) : null}
           {canSetup ? (
             <Link href="/settings/school" className="text-white/90 hover:text-white">
               School setup
@@ -65,6 +77,7 @@ export default async function HomePage() {
     >
       <h1 className="text-2xl font-semibold tracking-tight">Welcome, {me.displayName}</h1>
       {setup ? <SetupSummary status={setup} /> : null}
+      {people ? <PeopleSummary counts={people} /> : null}
       <div className="grid gap-4 sm:grid-cols-3">
         <Card title="Signed in as">
           <p data-testid="me-name">{me.displayName}</p>
@@ -92,7 +105,7 @@ export default async function HomePage() {
               'No modules enabled yet'}
           </p>
           <p className="mt-2 text-xs text-slate-400">
-            Student, attendance and other module screens are delivered in later phases.
+            Attendance, homework and other module screens are delivered in later phases.
           </p>
         </Card>
       </div>

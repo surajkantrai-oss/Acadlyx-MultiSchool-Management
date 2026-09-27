@@ -2,7 +2,8 @@
  * Development seed: three demo tenants with distinct branding, domains and features, plus
  * development identities for Phase 3 (school A/B principal, teacher, parent, student and a
  * multi-role teacher+parent), plus a fictional Phase 4 academic structure per school (branches,
- * academic years, grades, sections, subjects and grade–subject mappings).
+ * academic years, grades, sections, subjects and grade–subject mappings), plus fictional Phase 5
+ * students, parents, teachers, enrollments, guardians and teacher assignments.
  *
  *   DEV_SEED_PASSWORD='<12+ chars>' DEV_SEED_PIN='<6 digits>' pnpm db:seed
  *
@@ -564,6 +565,338 @@ async function seedAcademic(
   }
 }
 
+/**
+ * Phase 5 fictional people. Profiles are linked to the seeded identities above only when that
+ * User already holds the matching role (no silent grants); other profiles have no login.
+ * Idempotent: keyed by admission number / parent code / employee ID; existing rows are left alone.
+ */
+interface DemoPeople {
+  tenantKey: string;
+  parents: { code: string; first: string; last: string; phone?: string; linkPhone?: string }[];
+  teachers: {
+    employeeId: string;
+    first: string;
+    last: string;
+    email?: string;
+    linkLoginId?: string;
+  }[];
+  students: {
+    admission: string;
+    first: string;
+    last: string;
+    dob: string;
+    section?: [string, string, string]; // branch, grade, section in the current year
+    guardians?: [string, 'FATHER' | 'MOTHER' | 'GUARDIAN', boolean][];
+    linkLoginId?: string;
+  }[];
+  assignments?: [string, string, string, string | null][]; // employeeId, grade, section, subject|null (class teacher)
+}
+
+const DEMO_PEOPLE: DemoPeople[] = [
+  {
+    tenantKey: 'SCHOOL_A',
+    parents: [
+      {
+        code: 'PAR-A001',
+        first: 'Pooja',
+        last: 'Verma',
+        phone: '+919800000001',
+        linkPhone: '+919800000001',
+      },
+      {
+        code: 'PAR-A002',
+        first: 'Neha',
+        last: 'Sharma',
+        phone: '+919800000002',
+        linkPhone: '+919800000002',
+      },
+      { code: 'PAR-A003', first: 'Imran', last: 'Qureshi' },
+    ],
+    teachers: [
+      {
+        employeeId: 'TCH001',
+        first: 'Ravi',
+        last: 'Kumar',
+        email: 'teacher@school-a.example.com',
+        linkLoginId: 'TCH001',
+      },
+      {
+        employeeId: 'TCH002',
+        first: 'Neha',
+        last: 'Sharma',
+        email: 'neha@school-a.example.com',
+        linkLoginId: 'TCH002',
+      },
+      { employeeId: 'TCH003', first: 'Farah', last: 'Iqbal' },
+    ],
+    students: [
+      {
+        admission: 'STU001',
+        first: 'Aarav',
+        last: 'Verma',
+        dob: '2016-06-12',
+        section: ['MAIN', 'G5', 'A'],
+        guardians: [['PAR-A001', 'MOTHER', true]],
+        linkLoginId: 'STU001',
+      },
+      {
+        admission: 'STU002',
+        first: 'Diya',
+        last: 'Sharma',
+        dob: '2017-02-03',
+        section: ['MAIN', 'G4', 'A'],
+        guardians: [['PAR-A002', 'MOTHER', true]],
+      },
+      {
+        admission: 'STU003',
+        first: 'Kabir',
+        last: 'Qureshi',
+        dob: '2016-09-21',
+        section: ['MAIN', 'G5', 'A'],
+        guardians: [['PAR-A003', 'FATHER', true]],
+      },
+      {
+        admission: 'STU004',
+        first: 'Mira',
+        last: 'Qureshi',
+        dob: '2019-11-30',
+        section: ['NORTH', 'G1', 'A'],
+        guardians: [['PAR-A003', 'FATHER', true]],
+      },
+      { admission: 'STU005', first: 'Ishaan', last: 'Nair', dob: '2016-01-15' },
+    ],
+    assignments: [
+      ['TCH001', 'G5', 'A', null],
+      ['TCH001', 'G5', 'A', 'MATH'],
+      ['TCH002', 'G5', 'A', 'ENG'],
+      ['TCH002', 'G4', 'A', null],
+      ['TCH003', 'G5', 'A', 'EVS'],
+    ],
+  },
+  {
+    tenantKey: 'SCHOOL_B',
+    parents: [
+      {
+        code: 'PAR-B001',
+        first: 'Pooja',
+        last: 'Verma',
+        phone: '+919800000001',
+        linkPhone: '+919800000001',
+      },
+    ],
+    teachers: [
+      {
+        employeeId: 'TCH001',
+        first: 'Karan',
+        last: 'Mehta',
+        email: 'teacher@school-b.example.com',
+        linkLoginId: 'TCH001',
+      },
+    ],
+    students: [
+      {
+        admission: 'B-0001',
+        first: 'Rohan',
+        last: 'Verma',
+        dob: '2015-04-04',
+        guardians: [['PAR-B001', 'MOTHER', true]],
+      },
+    ],
+  },
+];
+
+async function seedPeople(prisma: PrismaClient): Promise<void> {
+  for (const demo of DEMO_PEOPLE) {
+    const tenant = await prisma.tenant.findUniqueOrThrow({ where: { key: demo.tenantKey } });
+    const tenantId = tenant.id;
+    const school = await prisma.school.findFirst({
+      where: { tenantId },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!school) {
+      process.stdout.write(`  people ${demo.tenantKey}: no school yet, skipped\n`);
+      continue;
+    }
+    const scope = { tenantId, schoolId: school.id };
+    const userWithRole = async (where: { phone?: string; loginId?: string }, role: string) => {
+      const user = await prisma.user.findFirst({
+        where: { tenantId, ...where, roles: { some: { role: { key: role } } } },
+      });
+      return user?.id ?? null;
+    };
+    const freeLink = async (model: 'student' | 'parent' | 'teacher', userId: string | null) => {
+      if (!userId) return null;
+      const taken =
+        model === 'student'
+          ? await prisma.student.findFirst({ where: { userId } })
+          : model === 'parent'
+            ? await prisma.parent.findFirst({ where: { userId } })
+            : await prisma.teacher.findFirst({ where: { userId } });
+      return taken ? null : userId;
+    };
+
+    const parents: Record<string, string> = {};
+    for (const p of demo.parents) {
+      const existing = await prisma.parent.findFirst({
+        where: { schoolId: school.id, parentCode: p.code },
+      });
+      const userId = existing
+        ? null
+        : await freeLink(
+            'parent',
+            p.linkPhone ? await userWithRole({ phone: p.linkPhone }, 'PARENT') : null,
+          );
+      const row =
+        existing ??
+        (await prisma.parent.create({
+          data: {
+            ...scope,
+            parentCode: p.code,
+            firstName: p.first,
+            lastName: p.last,
+            phone: p.phone ?? null,
+            userId,
+          },
+        }));
+      parents[p.code] = row.id;
+    }
+
+    const teachers: Record<string, string> = {};
+    for (const t of demo.teachers) {
+      const existing = await prisma.teacher.findUnique({
+        where: { schoolId_employeeId: { schoolId: school.id, employeeId: t.employeeId } },
+      });
+      const userId = existing
+        ? null
+        : await freeLink(
+            'teacher',
+            t.linkLoginId ? await userWithRole({ loginId: t.linkLoginId }, 'TEACHER') : null,
+          );
+      const row =
+        existing ??
+        (await prisma.teacher.create({
+          data: {
+            ...scope,
+            employeeId: t.employeeId,
+            firstName: t.first,
+            lastName: t.last,
+            email: t.email ?? null,
+            userId,
+          },
+        }));
+      teachers[t.employeeId] = row.id;
+    }
+
+    const year = await prisma.academicYear.findFirst({
+      where: { schoolId: school.id, isCurrent: true },
+    });
+    const section = async (branch: string, grade: string, code: string) =>
+      year
+        ? prisma.section.findFirst({
+            where: {
+              schoolId: school.id,
+              academicYearId: year.id,
+              code,
+              branch: { code: branch },
+              grade: { code: grade },
+            },
+          })
+        : null;
+
+    let created = 0;
+    for (const s of demo.students) {
+      if (
+        await prisma.student.findUnique({
+          where: {
+            schoolId_admissionNumber: { schoolId: school.id, admissionNumber: s.admission },
+          },
+        })
+      )
+        continue;
+      const userId = await freeLink(
+        'student',
+        s.linkLoginId ? await userWithRole({ loginId: s.linkLoginId }, 'STUDENT') : null,
+      );
+      const student = await prisma.student.create({
+        data: {
+          ...scope,
+          admissionNumber: s.admission,
+          firstName: s.first,
+          lastName: s.last,
+          dateOfBirth: day(s.dob),
+          admissionDate: day('2026-04-01'),
+          userId,
+        },
+      });
+      created += 1;
+      await prisma.studentStatusHistory.create({
+        data: { ...scope, studentId: student.id, toStatus: 'ACTIVE', reason: 'Seeded' },
+      });
+      const sec = s.section ? await section(...s.section) : null;
+      if (sec && year)
+        await prisma.studentEnrollment.create({
+          data: {
+            ...scope,
+            studentId: student.id,
+            sectionId: sec.id,
+            academicYearId: year.id,
+            startDate: day('2026-04-01'),
+          },
+        });
+      for (const [code, relationship, isPrimary] of s.guardians ?? []) {
+        const parentId = parents[code];
+        if (parentId)
+          await prisma.studentGuardian.create({
+            data: {
+              ...scope,
+              studentId: student.id,
+              parentId,
+              relationship,
+              isPrimary,
+              pickupAuthorized: true,
+              isEmergencyContact: isPrimary,
+            },
+          });
+      }
+    }
+
+    for (const [employeeId, grade, code, subjectCode] of demo.assignments ?? []) {
+      const teacherId = teachers[employeeId];
+      const sec = await section('MAIN', grade, code);
+      if (!teacherId || !sec) continue;
+      const subject = subjectCode
+        ? await prisma.subject.findUnique({
+            where: { schoolId_code: { schoolId: school.id, code: subjectCode } },
+          })
+        : null;
+      if (subjectCode && !subject) continue;
+      const exists = await prisma.teacherAssignment.findFirst({
+        where: { teacherId, sectionId: sec.id, subjectId: subject?.id ?? null, endedAt: null },
+      });
+      if (exists) continue;
+      if (
+        !subject &&
+        (await prisma.teacherAssignment.findFirst({
+          where: { sectionId: sec.id, type: 'CLASS_TEACHER', endedAt: null },
+        }))
+      )
+        continue;
+      await prisma.teacherAssignment.create({
+        data: {
+          ...scope,
+          teacherId,
+          sectionId: sec.id,
+          subjectId: subject?.id ?? null,
+          type: subject ? 'SUBJECT_TEACHER' : 'CLASS_TEACHER',
+        },
+      });
+    }
+    process.stdout.write(
+      `  people ${demo.tenantKey}: ${String(demo.parents.length)} parents, ${String(demo.teachers.length)} teachers, +${String(created)} students\n`,
+    );
+  }
+}
+
 async function main(): Promise<void> {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('Refusing to seed demo tenants in production');
@@ -630,6 +963,7 @@ async function main(): Promise<void> {
     }
     await seedIdentities(prisma, app.get(PasswordHasher));
     await seedAcademic(prisma, Object.fromEntries(DEMO_TENANTS.map((d) => [d.key, d.timezone])));
+    await seedPeople(prisma);
   } finally {
     await app.close();
   }

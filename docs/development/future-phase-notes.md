@@ -23,6 +23,16 @@ Items noticed during Phase 1 that were intentionally **not** implemented.
 - Drag-and-drop ordering (up/down controls are provided); bulk import of classes/sections.
 - Hard deletion of mistaken setup rows that are still unused.
 
+## Noted during Phase 5 (deliberately not implemented)
+
+- Import "update existing" mode (approved policy: duplicates are rejected), and imports of
+  enrollments/assignments on their own.
+- Section capacity enforcement and waitlists; promotion/rollover of whole classes between years.
+- Family self-service (parents/students viewing their own profiles) — needs RBAC ownership rules.
+- Privileged correction of a GRADUATED student (terminal in the normal lifecycle).
+- Photo/document uploads for profiles; merging duplicate parent profiles.
+- Separate worker process/deployment for BullMQ (it runs inside the API today).
+
 ## Noted during Phase 3 (deliberately not implemented)
 
 - Real SMS and email OTP providers. Delivery is the dev outbox only, and production fails closed.

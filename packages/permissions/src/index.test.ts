@@ -52,17 +52,32 @@ describe('RBAC registry', () => {
   it('grants Phase 4 academic permissions without over-granting', () => {
     const manage = PERMISSION_REGISTRY.map((p) => p.key).filter((k) => k.endsWith('.manage'));
     const tenantManage = manage.filter((k) => !k.startsWith('platform.'));
-    expect(tenantManage).toHaveLength(7);
+    expect(
+      tenantManage.filter((k) =>
+        [
+          'school',
+          'branch',
+          'academic_year',
+          'grade',
+          'section',
+          'subject',
+          'academic_configuration',
+        ].includes(k.split('.')[0] ?? ''),
+      ),
+    ).toHaveLength(7);
     for (const role of ['PRINCIPAL', 'SCHOOL_ADMIN']) {
       expect(permissionsForRoles([role])).toEqual(expect.arrayContaining(tenantManage));
     }
-    for (const role of ['ACCOUNTANT', 'TEACHER', 'ADMISSION_OFFICER', 'TRANSPORT_MANAGER']) {
+    for (const role of ['ACCOUNTANT', 'TEACHER', 'TRANSPORT_MANAGER']) {
       expect(permissionsForRoles([role]).filter((k) => k.endsWith('.manage'))).toEqual([]);
     }
     expect(permissionsForRoles(['TEACHER'])).toEqual(
       expect.arrayContaining(['grade.read', 'section.read', 'subject.read']),
     );
     expect(permissionsForRoles(['TRANSPORT_MANAGER'])).not.toContain('grade.read');
+    expect(permissionsForRoles(['TRANSPORT_MANAGER']).some((k) => k.startsWith('student.'))).toBe(
+      false,
+    );
     for (const role of ['PARENT', 'STUDENT']) {
       expect(permissionsForRoles([role])).toEqual(['tenant.workspace.access']);
     }
@@ -85,5 +100,41 @@ describe('RBAC registry', () => {
       idleMinutes: 30,
       absoluteMinutes: 720,
     });
+  });
+});
+
+describe('Phase 5 people grants', () => {
+  it('leadership manages people; staff get conservative read access', () => {
+    for (const role of ['PRINCIPAL', 'SCHOOL_ADMIN']) {
+      expect(permissionsForRoles([role])).toEqual(
+        expect.arrayContaining([
+          'student.manage',
+          'teacher.manage',
+          'bulk_import.manage',
+          'people_account.manage',
+        ]),
+      );
+    }
+    const ao = permissionsForRoles(['ADMISSION_OFFICER']);
+    expect(ao).toEqual(
+      expect.arrayContaining([
+        'student.manage',
+        'parent.manage',
+        'enrollment.manage',
+        'bulk_import.manage',
+      ]),
+    );
+    expect(ao).not.toContain('teacher.manage');
+    expect(ao).not.toContain('people_account.manage');
+    expect(ao).not.toContain('teacher_assignment.manage');
+    const teacher = permissionsForRoles(['TEACHER']);
+    expect(teacher).toEqual(
+      expect.arrayContaining(['student.read', 'parent.read', 'teacher_assignment.read']),
+    );
+    expect(teacher.filter((k) => k.endsWith('.manage'))).toEqual([]);
+    expect(teacher).not.toContain('bulk_import.read');
+    expect(
+      permissionsForRoles(['ACCOUNTANT']).filter((k) => /^(student|enrollment)\./.test(k)),
+    ).toEqual(['enrollment.read', 'student.read']);
   });
 });

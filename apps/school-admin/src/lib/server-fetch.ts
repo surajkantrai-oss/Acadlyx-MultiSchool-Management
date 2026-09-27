@@ -8,13 +8,14 @@ import https from 'node:https';
  * School Admin server must forward the browser's Host so the API resolves the school exactly as
  * it would for a direct request (tenant resolution is Host-based). This is the real request Host
  * — not a trusted internal header — and the API still validates it against TenantDomain.
- * Supports what the api-client uses: method, headers, string body, AbortSignal.
+ * Supports what the api-client and BFF use: method, headers, string/Buffer body, AbortSignal.
  */
 export const hostForwardingFetch: typeof fetch = (input, init = {}) => {
   const url = new URL(input instanceof Request ? input.url : String(input));
   const transport = url.protocol === 'https:' ? https : http;
   const headers = Object.fromEntries(new Headers(init.headers).entries());
-  const body = typeof init.body === 'string' ? init.body : undefined;
+  const body =
+    typeof init.body === 'string' || init.body instanceof Uint8Array ? init.body : undefined;
 
   return new Promise<Response>((resolve, reject) => {
     const req = transport.request(

@@ -53,6 +53,19 @@ export class AcademicStore {
     return result;
   }
 
+  /**
+   * Like mutate() but WITHOUT the school row lock — for high-volume people operations whose
+   * invariants are guaranteed by unique indexes (violations are mapped to domain errors).
+   */
+  async transact<T>(
+    fn: (tx: TenantTransaction, school: School, events: AuditEvent[]) => Promise<T>,
+  ): Promise<T> {
+    const events: AuditEvent[] = [];
+    const result = await this.db.run(async (tx) => fn(tx, await this.school(tx), events));
+    for (const event of events) await this.audit.recordTenant(event);
+    return result;
+  }
+
   async school(tx: TenantTransaction): Promise<School> {
     const school = await tx.school.findFirst({ orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
     if (!school) throw ACADEMIC_ERRORS.schoolNotFound();

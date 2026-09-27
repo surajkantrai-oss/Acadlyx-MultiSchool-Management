@@ -31,6 +31,16 @@ export async function purgeTenants(prisma: PlatformPrismaService, prefix: string
   ).map((t) => t.id);
   const byTenant = { tenantId: { in: tenantIds } };
   await prisma.$transaction([
+    // Phase 5 (profiles reference users/sections — delete them first).
+    prisma.bulkImportRow.deleteMany({ where: byTenant }),
+    prisma.bulkImportJob.deleteMany({ where: byTenant }),
+    prisma.teacherAssignment.deleteMany({ where: byTenant }),
+    prisma.studentEnrollment.deleteMany({ where: byTenant }),
+    prisma.studentGuardian.deleteMany({ where: byTenant }),
+    prisma.studentStatusHistory.deleteMany({ where: byTenant }),
+    prisma.student.deleteMany({ where: byTenant }),
+    prisma.parent.deleteMany({ where: byTenant }),
+    prisma.teacher.deleteMany({ where: byTenant }),
     prisma.auditLog.deleteMany({ where: byTenant }),
     prisma.platformAuditLog.deleteMany({ where: byTenant }),
     prisma.otpChallenge.deleteMany({ where: byTenant }),
@@ -126,4 +136,89 @@ export async function createFixtureSchools(
     result[letter] = school.id;
   }
   return result;
+}
+
+export interface AcademicFixture {
+  branchId: string;
+  yearId: string;
+  closedYearId: string;
+  gradeId: string;
+  sectionA: string;
+  sectionB: string;
+  closedSection: string;
+  inactiveSection: string;
+  mathId: string;
+  artId: string;
+}
+
+/**
+ * Phase 5 fixture: one branch, an ACTIVE current year + a CLOSED year, one grade with sections
+ * A/B (active year), a section in the closed year, an inactive section, and two subjects of
+ * which only MATH is mapped to the grade. Codes are identical in every tenant on purpose.
+ */
+export async function createAcademicFixture(
+  prisma: PlatformPrismaService,
+  tenantId: string,
+  schoolId: string,
+): Promise<AcademicFixture> {
+  const scope = { tenantId, schoolId };
+  const branch = await prisma.branch.create({
+    data: { ...scope, name: 'Main', code: 'MAIN', timezone: 'Asia/Kolkata', isPrimary: true },
+  });
+  const year = await prisma.academicYear.create({
+    data: {
+      ...scope,
+      name: '2026–27',
+      startDate: new Date('2026-04-01'),
+      endDate: new Date('2027-03-31'),
+      status: 'ACTIVE',
+      isCurrent: true,
+    },
+  });
+  const closed = await prisma.academicYear.create({
+    data: {
+      ...scope,
+      name: '2025–26',
+      startDate: new Date('2025-04-01'),
+      endDate: new Date('2026-03-31'),
+      status: 'CLOSED',
+    },
+  });
+  const grade = await prisma.grade.create({
+    data: { ...scope, name: 'Grade 5', code: 'G5', displayOrder: 0 },
+  });
+  const section = (academicYearId: string, code: string, displayOrder: number, isActive = true) =>
+    prisma.section.create({
+      data: {
+        ...scope,
+        branchId: branch.id,
+        academicYearId,
+        gradeId: grade.id,
+        name: code,
+        code,
+        displayOrder,
+        isActive,
+      },
+    });
+  const a = await section(year.id, 'A', 0);
+  const b = await section(year.id, 'B', 1);
+  const c = await section(year.id, 'C', 2, false);
+  const old = await section(closed.id, 'A', 0);
+  const math = await prisma.subject.create({
+    data: { ...scope, name: 'Mathematics', code: 'MATH' },
+  });
+  const art = await prisma.subject.create({ data: { ...scope, name: 'Art', code: 'ART' } });
+  await prisma.gradeSubject.create({ data: { ...scope, gradeId: grade.id, subjectId: math.id } });
+  return {
+    branchId: branch.id,
+    yearId: year.id,
+    closedYearId: closed.id,
+    gradeId: grade.id,
+    sectionA: a.id,
+    sectionB: b.id,
+    closedSection: old.id,
+    inactiveSection: c.id,
+    mathId: math.id,
+    artId: art.id,
+  };
 }

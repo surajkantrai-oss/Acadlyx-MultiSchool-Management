@@ -150,3 +150,24 @@ describe('academic client (Phase 4)', () => {
     );
   });
 });
+
+describe('people client (Phase 5)', () => {
+  it('builds paginated, filtered, encoded tenant paths', async () => {
+    const urls: string[] = [];
+    const fake = ((url: string, init: RequestInit) => {
+      urls.push(`${init.method ?? 'GET'} ${url}`);
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    }) as typeof fetch;
+    const api = createApiClient({ baseUrl: 'http://api.test/api/v1', fetch: fake });
+    await api.people.students({ q: 'asha rao', gradeId: 'g1', page: 2, pageSize: 25 });
+    await api.people.createAccount('teachers', 't/1');
+    await api.people.assignments('t1', true);
+    await api.people.importRows('j1', { status: 'INVALID' });
+    expect(urls).toEqual([
+      'GET http://api.test/api/v1/students?q=asha+rao&gradeId=g1&page=2&pageSize=25',
+      'POST http://api.test/api/v1/teachers/t%2F1/account',
+      'GET http://api.test/api/v1/teachers/t1/assignments?includeEnded=true',
+      'GET http://api.test/api/v1/imports/j1/rows?status=INVALID',
+    ]);
+  });
+});

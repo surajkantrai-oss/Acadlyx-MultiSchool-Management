@@ -245,7 +245,7 @@ describe('Tenant authentication (e2e)', () => {
         .post('/api/v1/auth/mfa/verify')
         .send({ mfaToken: again.mfaToken, code })
         .expect(401);
-      expect(replay.body.code).toBe('INVALID_MFA');
+      expect(replay.body.code, JSON.stringify(replay.body)).toBe('INVALID_MFA');
     }, 45_000 /* may wait for the next TOTP step (shared clock) */);
 
     it('recovery codes work exactly once', async () => {
