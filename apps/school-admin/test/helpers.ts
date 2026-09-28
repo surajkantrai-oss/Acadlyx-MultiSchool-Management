@@ -236,7 +236,14 @@ export function totp(base32Secret: string, at = Date.now()): string {
 export async function createAcademic(
   client: pg.Client,
   tenantId: string,
-): Promise<{ sectionA: string; sectionB: string; mathId: string }> {
+): Promise<{
+  sectionA: string;
+  sectionB: string;
+  mathId: string;
+  yearId: string;
+  branchId: string;
+  schoolId: string;
+}> {
   const one = async (sql: string, params: unknown[]) =>
     (await client.query<{ id: string }>(sql, params)).rows[0]?.id ?? '';
   const schoolId = await one('SELECT id FROM schools WHERE tenant_id = $1', [tenantId]);
@@ -268,7 +275,7 @@ export async function createAcademic(
     'INSERT INTO grade_subjects (id, tenant_id, school_id, grade_id, subject_id, updated_at) VALUES (gen_random_uuid(), $1, $2, $3, $4, now())',
     [...s, grade, mathId],
   );
-  return { sectionA, sectionB, mathId };
+  return { sectionA, sectionB, mathId, yearId: year, branchId: branch, schoolId };
 }
 
 /** Multipart form body (single file field + text fields) for raw http requests. */

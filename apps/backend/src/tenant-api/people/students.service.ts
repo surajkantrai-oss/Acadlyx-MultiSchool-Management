@@ -15,6 +15,7 @@ import {
   isoDate,
 } from '../academic/academic-store.js';
 import { PEOPLE_ERRORS } from './people-errors.js';
+import { accountFilter, studentScope, withScope } from './people-scope.js';
 import {
   ACCOUNT_SELECT,
   currentPlacement,
@@ -72,10 +73,30 @@ export class StudentsService {
       const filtered = Boolean(
         query.sectionId ?? query.academicYearId ?? query.branchId ?? query.gradeId,
       );
-      const where: Prisma.StudentWhereInput = {
+      // Data-quality filters (Phase 6) describe situations, not errors: an ACTIVE student with no
+      // ACTIVE placement (in the chosen year, if any), or with no guardian linked.
+      const quality: Prisma.StudentWhereInput =
+        query.quality === 'NO_ENROLLMENT'
+          ? {
+              status: 'ACTIVE',
+              enrollments: {
+                none: definedOnly({
+                  status: 'ACTIVE' as const,
+                  academicYearId: query.academicYearId,
+                }),
+              },
+            }
+          : query.quality === 'NO_GUARDIAN'
+            ? { status: 'ACTIVE', guardians: { none: {} } }
+            : {};
+      const base: Prisma.StudentWhereInput = {
         schoolId: school.id,
         ...(query.status ? { status: query.status } : {}),
-        ...(filtered ? { enrollments: { some: placement } } : {}),
+        ...(filtered && query.quality !== 'NO_ENROLLMENT'
+          ? { enrollments: { some: placement } }
+          : {}),
+        ...quality,
+        ...accountFilter(query.account),
         ...(query.q
           ? {
               OR: [
@@ -87,6 +108,7 @@ export class StudentsService {
             }
           : {}),
       };
+      const where = withScope(base, studentScope());
       const [total, rows] = await Promise.all([
         tx.student.count({ where }),
         tx.student.findMany({
@@ -106,8 +128,12 @@ export class StudentsService {
     });
   }
 
+  /** Read path: also applies the people data scope (out-of-scope ids are 404). */
   get(id: string): Promise<StudentDetail> {
-    return this.store.run((tx) => this.detail(tx, id));
+    return this.store.run(async (tx) => {
+      await this.visible(tx, id);
+      return this.detail(tx, id);
+    });
   }
 
   create(dto: CreateStudentDto): Promise<StudentDetail> {
@@ -326,8 +352,7 @@ export class StudentsService {
 
   enrollments(studentId: string): Promise<Enrollment[]> {
     return this.store.run(async (tx) => {
-      const school = await this.store.school(tx);
-      await this.find(tx, school, studentId);
+      await this.visible(tx, studentId);
       const rows = await tx.studentEnrollment.findMany({
         where: { studentId },
         include: { section: SECTION_CONTEXT },
@@ -504,6 +529,15 @@ export class StudentsService {
     return toGuardianLink(link);
   }
 
+  private async visible(tx: TenantTransaction, id: string): Promise<void> {
+    const school = await this.store.school(tx);
+    const found = await tx.student.findFirst({
+      where: withScope<Prisma.StudentWhereInput>({ id, schoolId: school.id }, studentScope()),
+      select: { id: true },
+    });
+    if (!found) throw PEOPLE_ERRORS.studentNotFound();
+  }
+
   private async find(tx: TenantTransaction, school: School, id: string) {
     const student = await tx.student.findFirst({ where: { id, schoolId: school.id } });
     if (!student) throw PEOPLE_ERRORS.studentNotFound();
@@ -586,6 +620,19 @@ export class StudentsService {
       },
     });
     if (!r) throw PEOPLE_ERRORS.studentNotFound();
+    const actorIds = [
+      ...new Set(r.statusHistory.map((h) => h.changedByUserId).filter((v) => v !== null)),
+    ];
+    const actors = new Map(
+      actorIds.length
+        ? (
+            await tx.user.findMany({
+              where: { id: { in: actorIds } },
+              select: { id: true, displayName: true },
+            })
+          ).map((u) => [u.id, u.displayName])
+        : [],
+    );
     return {
       ...this.summary({ ...r, enrollments: r.enrollments.filter((e) => e.status === 'ACTIVE') }),
       dateOfBirth: r.dateOfBirth ? isoDate(r.dateOfBirth) : null,
@@ -607,6 +654,7 @@ export class StudentsService {
         toStatus: h.toStatus,
         reason: h.reason,
         at: h.createdAt.toISOString(),
+        actorName: h.changedByUserId ? (actors.get(h.changedByUserId) ?? null) : null,
       })),
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),

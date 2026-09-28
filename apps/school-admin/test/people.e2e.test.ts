@@ -297,8 +297,11 @@ describe('School Admin — People (Phase 5)', () => {
   });
 
   it('teachers read people but cannot manage or import; parents see no people pages', async () => {
+    // Phase 6 (approved decision A): a teacher with no assigned class sees no students at all.
     const html = (await page(teacher, '/people/students')).body;
-    expect(html).toContain('data-testid="students-table"');
+    expect(html).not.toContain('data-testid="no-access"');
+    expect(html).toContain('No students yet');
+    expect(html).not.toContain('Aarav');
     expect(html).not.toContain('Add a student');
     expect((await page(teacher, '/people/imports')).body).toContain('data-testid="no-access"');
     expect(

@@ -30,6 +30,7 @@ import type {
   TeacherStatusDto,
   UpdateTeacherDto,
 } from './people.dto.js';
+import { accountFilter } from './people-scope.js';
 
 const LIST_INCLUDE = {
   user: ACCOUNT_SELECT,
@@ -52,6 +53,11 @@ export class TeachersService {
       const where: Prisma.TeacherWhereInput = {
         schoolId: school.id,
         ...(query.status ? { status: query.status } : {}),
+        ...accountFilter(query.account),
+        // A new teacher without assignments is normal; this is an operational filter only.
+        ...(query.quality === 'NO_ASSIGNMENT'
+          ? { status: 'ACTIVE' as const, assignments: { none: { endedAt: null } } }
+          : {}),
         ...(query.q
           ? {
               OR: [

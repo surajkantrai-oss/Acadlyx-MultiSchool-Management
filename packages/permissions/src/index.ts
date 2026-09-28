@@ -120,6 +120,20 @@ export const PERMISSION_REGISTRY = [
     scope: 'TENANT',
     description: 'Create or link login accounts for student/parent/teacher profiles',
   },
+  // Phase 6 — school activity feed (humanised AuditLog events), leadership only.
+  {
+    key: 'school_activity.read',
+    scope: 'TENANT',
+    description:
+      'View recent school activity (people, classes, imports, login accounts) on the dashboard',
+  },
+  // Phase 6 — data scope for people reads (approved: teachers see only their assigned sections).
+  {
+    key: 'people.read_all',
+    scope: 'TENANT',
+    description:
+      'Read every student, guardian, enrollment and class roster in the school (without it, reads are limited to sections the user actively teaches)',
+  },
 ] as const satisfies readonly { key: string; scope: AuthScope; description: string }[];
 
 export type PermissionKey = (typeof PERMISSION_REGISTRY)[number]['key'];
@@ -184,6 +198,7 @@ const PEOPLE_MANAGE: readonly PermissionKey[] = [
   'bulk_import.read',
   'bulk_import.manage',
   'people_account.manage',
+  'people.read_all',
 ];
 
 /** Phase 4: read-only academic structure needed by staff in later modules. */
@@ -220,6 +235,7 @@ export const ROLE_REGISTRY = [
       'tenant.settings.read',
       ...ACADEMIC_MANAGE,
       ...PEOPLE_MANAGE,
+      'school_activity.read',
     ],
     mfaRequired: true,
     pinAllowed: false,
@@ -235,6 +251,7 @@ export const ROLE_REGISTRY = [
       'tenant.settings.read',
       ...ACADEMIC_MANAGE,
       ...PEOPLE_MANAGE,
+      'school_activity.read',
     ],
     mfaRequired: true,
     pinAllowed: false,
@@ -250,6 +267,7 @@ export const ROLE_REGISTRY = [
       ...ACADEMIC_STRUCTURE_READ,
       'student.read',
       'enrollment.read',
+      'people.read_all',
     ],
     mfaRequired: true,
     pinAllowed: false,
@@ -290,6 +308,7 @@ export const ROLE_REGISTRY = [
       'enrollment.manage',
       'bulk_import.read',
       'bulk_import.manage',
+      'people.read_all',
     ],
     mfaRequired: false,
     pinAllowed: false,

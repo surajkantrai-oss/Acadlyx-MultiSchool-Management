@@ -24,7 +24,8 @@ import {
   useUnsavedWarning,
 } from '../setup/ui';
 import { AccountPanel } from './account-panel';
-import { AccountBadge, Dl, personName } from './shared';
+import { ConfirmDialog } from '../shell/confirm-dialog';
+import { ACCOUNT_FILTER_OPTIONS, AccountBadge, Dl, personName } from './shared';
 import { sectionOptions, type Structure } from './structure';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -46,11 +47,15 @@ export function StudentFilters({
   status,
   structure,
   selected,
+  account = '',
+  quality = '',
 }: {
   q: string;
   status: string;
   structure: Structure;
   selected: Partial<Record<'academicYearId' | 'sectionId' | 'gradeId' | 'branchId', string>>;
+  account?: string;
+  quality?: string;
 }) {
   const router = useRouter();
   return (
@@ -83,6 +88,24 @@ export function StudentFilters({
         options={[
           { value: '', label: 'Any' },
           ...Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label })),
+        ]}
+      />
+      <SelectField
+        idPrefix="f"
+        name="account"
+        label="Login"
+        defaultValue={account}
+        options={ACCOUNT_FILTER_OPTIONS}
+      />
+      <SelectField
+        idPrefix="f"
+        name="quality"
+        label="Review"
+        defaultValue={quality}
+        options={[
+          { value: '', label: 'Any' },
+          { value: 'NO_ENROLLMENT', label: 'Not placed in a class' },
+          { value: 'NO_GUARDIAN', label: 'No guardian linked' },
         ]}
       />
       {structure.years.length > 0 ? (
@@ -252,6 +275,12 @@ export function StudentDetailView({
   can: { manage: boolean; enroll: boolean; accounts: boolean; parents: boolean };
 }) {
   const { busy, notice, setNotice, run } = useAction();
+  const [confirm, setConfirm] = useState<{
+    title: string;
+    body: string;
+    label: string;
+    action: () => Promise<boolean>;
+  } | null>(null);
   const [editing, setEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
   useUnsavedWarning(dirty);
@@ -395,11 +424,21 @@ export function StudentDetailView({
               onSubmit={(e) => {
                 e.preventDefault();
                 const v = formValues(e.currentTarget);
-                void post(
-                  'status',
-                  { status: v.status, reason: v.reason || undefined },
-                  `Status changed to ${STATUS_LABEL[v.status ?? ''] ?? v.status}.`,
-                );
+                const label = STATUS_LABEL[v.status ?? ''] ?? v.status ?? '';
+                setConfirm({
+                  title: `Change status to ${label}?`,
+                  body:
+                    v.status === 'WITHDRAWN' || v.status === 'GRADUATED'
+                      ? `${personName(s)}'s current class placement will end. ${v.status === 'GRADUATED' ? 'Graduation cannot be undone by a status change.' : 'The student can be re-admitted later.'}`
+                      : `${personName(s)} will be marked ${label.toLowerCase()}.`,
+                  label: `Mark ${label.toLowerCase()}`,
+                  action: () =>
+                    post(
+                      'status',
+                      { status: v.status, reason: v.reason || undefined },
+                      `Status changed to ${label}.`,
+                    ),
+                });
               }}
             >
               <SelectField
@@ -428,9 +467,9 @@ export function StudentDetailView({
         </Card>
       ) : null}
 
-      <Card title="Enrollment">
+      <Card title="Academic placement">
         {s.enrollments.length === 0 ? (
-          <p className="text-sm">Not enrolled.</p>
+          <p className="text-sm">Not placed in a class yet.</p>
         ) : (
           <ol
             className="flex flex-col gap-2"
@@ -479,13 +518,19 @@ export function StudentDetailView({
                     <SmallButton
                       disabled={busy}
                       label={`Mark ${e.academicYearName} completed`}
-                      onClick={() =>
-                        void post(
-                          `enrollments/${e.enrollmentId}/end`,
-                          { status: 'COMPLETED' },
-                          'Enrollment completed.',
-                        )
-                      }
+                      onClick={() => {
+                        setConfirm({
+                          title: `Complete ${e.academicYearName} enrollment?`,
+                          body: `${personName(s)} will no longer be placed in ${e.gradeName} ${e.sectionName}. The history is kept.`,
+                          label: 'Complete enrollment',
+                          action: () =>
+                            post(
+                              `enrollments/${e.enrollmentId}/end`,
+                              { status: 'COMPLETED' },
+                              'Enrollment completed.',
+                            ),
+                        });
+                      }}
                     >
                       Complete
                     </SmallButton>
@@ -570,12 +615,19 @@ export function StudentDetailView({
                     <SmallButton
                       disabled={busy}
                       label={`Unlink ${personName(g.parent)}`}
-                      onClick={() =>
-                        void run(
-                          () => bffApi(`students/${s.id}/guardians/${g.id}`, { method: 'DELETE' }),
-                          'Guardian unlinked (the parent profile is kept).',
-                        )
-                      }
+                      onClick={() => {
+                        setConfirm({
+                          title: `Unlink ${personName(g.parent)}?`,
+                          body: `${personName(g.parent)} will no longer be a guardian of ${personName(s)}. The parent profile is kept.`,
+                          label: 'Unlink guardian',
+                          action: () =>
+                            run(
+                              () =>
+                                bffApi(`students/${s.id}/guardians/${g.id}`, { method: 'DELETE' }),
+                              'Guardian unlinked (the parent profile is kept).',
+                            ),
+                        });
+                      }}
                     >
                       Unlink
                     </SmallButton>
@@ -588,7 +640,84 @@ export function StudentDetailView({
         {can.manage && can.parents ? <LinkGuardian studentId={s.id} busy={busy} run={run} /> : null}
       </Card>
 
-      {can.accounts ? <AccountPanel kind="students" id={s.id} account={s.account} /> : null}
+      <div>
+        {can.accounts ? (
+          <AccountPanel kind="students" id={s.id} account={s.account} />
+        ) : (
+          <section id="login-account" aria-label="Login account">
+            <Card title="Login account">
+              <AccountBadge account={s.account} />
+            </Card>
+          </section>
+        )}
+      </div>
+
+      <Card title="Status history">
+        {s.statusHistory.length === 0 ? (
+          <p className="text-sm">No status changes recorded.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm" data-testid="status-history">
+              <caption className="sr-only">Status history, newest first</caption>
+              <thead className="text-xs uppercase text-slate-500">
+                <tr>
+                  <th scope="col" className="py-1 pr-3">
+                    Date
+                  </th>
+                  <th scope="col" className="py-1 pr-3">
+                    From
+                  </th>
+                  <th scope="col" className="py-1 pr-3">
+                    To
+                  </th>
+                  <th scope="col" className="py-1 pr-3">
+                    Reason
+                  </th>
+                  <th scope="col" className="py-1">
+                    By
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {s.statusHistory.map((h) => (
+                  <tr key={`${h.at}-${h.toStatus}`} className="border-t border-slate-100">
+                    <td className="py-1.5 pr-3">
+                      <time dateTime={h.at}>{h.at.slice(0, 10)}</time>
+                    </td>
+                    <td className="py-1.5 pr-3">
+                      {h.fromStatus ? STATUS_LABEL[h.fromStatus] : '—'}
+                    </td>
+                    <th scope="row" className="py-1.5 pr-3 font-medium">
+                      {STATUS_LABEL[h.toStatus]}
+                    </th>
+                    <td className="py-1.5 pr-3">{h.reason ?? '—'}</td>
+                    <td className="py-1.5">{h.actorName ?? 'System'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <ConfirmDialog
+        open={confirm !== null}
+        title={confirm?.title ?? ''}
+        confirmLabel={confirm?.label ?? 'Confirm'}
+        busy={busy}
+        onCancel={() => {
+          setConfirm(null);
+        }}
+        onConfirm={() => {
+          const action = confirm?.action;
+          if (!action) return;
+          void action().then(() => {
+            setConfirm(null);
+          });
+        }}
+      >
+        {confirm?.body}
+      </ConfirmDialog>
     </div>
   );
 }

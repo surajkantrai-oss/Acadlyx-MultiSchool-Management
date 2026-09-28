@@ -1,6 +1,7 @@
-import Link from 'next/link';
+import { Badge } from '@acadlyx/web-ui';
 import { notFound } from 'next/navigation';
-import { personName } from '@/components/people/shared';
+import { AccountBadge, personName } from '@/components/people/shared';
+import { Breadcrumbs } from '@/components/shell/breadcrumbs';
 import { StudentDetailView } from '@/components/people/students';
 import { LoadError, NoAccess, PageHeader } from '@/components/setup/states';
 import { load, setupContext } from '@/lib/setup';
@@ -33,12 +34,53 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
     r && r.ok ? r.data : f;
   return (
     <>
-      <p className="text-sm">
-        <Link className="underline" href="/people/students">
-          ← Students
-        </Link>
-      </p>
+      <Breadcrumbs
+        items={[
+          { label: 'People' },
+          { label: 'Students', href: '/people/students' },
+          { label: personName(student.data) },
+        ]}
+      />
       <PageHeader title={personName(student.data)} />
+      <dl
+        className="flex flex-wrap gap-x-6 gap-y-2 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm"
+        data-testid="student-header"
+      >
+        <div>
+          <dt className="text-xs text-slate-500">Admission no.</dt>
+          <dd className="font-mono">{student.data.admissionNumber}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-slate-500">Status</dt>
+          <dd>
+            <Badge tone={student.data.status === 'ACTIVE' ? 'success' : 'neutral'}>
+              {student.data.status.toLowerCase()}
+            </Badge>
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-slate-500">Class</dt>
+          <dd>
+            {student.data.currentPlacement
+              ? `${student.data.currentPlacement.gradeName} ${student.data.currentPlacement.sectionName}`
+              : 'Not placed'}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-slate-500">Branch</dt>
+          <dd>{student.data.currentPlacement?.branchName ?? '—'}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-slate-500">Academic year</dt>
+          <dd>{student.data.currentPlacement?.academicYearName ?? '—'}</dd>
+        </div>
+        <div>
+          <dt className="text-xs text-slate-500">Login</dt>
+          <dd>
+            <AccountBadge account={student.data.account} />
+          </dd>
+        </div>
+      </dl>
       <StudentDetailView
         student={student.data}
         structure={{

@@ -23,6 +23,19 @@ Items noticed during Phase 1 that were intentionally **not** implemented.
 - Drag-and-drop ordering (up/down controls are provided); bulk import of classes/sections.
 - Hard deletion of mistaken setup rows that are still unused.
 
+## Noted during Phase 6 (deliberately not implemented)
+
+- A full, filterable school activity log page (Phase 6 shows only the 10 most recent events).
+- Refreshing planner statistics (`ANALYZE`) right after very large bulk imports. Autovacuum does
+  it eventually; queries run straight after a 5,000-row insert were measurably slower.
+- Persisting the academic context across logins (a session cookie today; a server-side preference
+  would need a table).
+- Branch-level security (branch is a filter only; no per-branch roles yet).
+- Class promotion/rollover, capacity enforcement and waitlists.
+- Component-level (DOM) accessibility test tooling; accessibility is covered by lint, markup
+  assertions and manual checks.
+- A People-list default filter tied to the academic context (lists stay school-wide by design).
+
 ## Noted during Phase 5 (deliberately not implemented)
 
 - Import "update existing" mode (approved policy: duplicates are rejected), and imports of

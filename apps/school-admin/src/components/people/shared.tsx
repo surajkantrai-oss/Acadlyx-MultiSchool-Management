@@ -81,3 +81,18 @@ export function Dl({ items }: { items: [string, React.ReactNode][] }) {
     </dl>
   );
 }
+
+/** Login-state filter options shared by the people lists (URL value → label). */
+export const ACCOUNT_FILTER_OPTIONS = [
+  { value: '', label: 'Any' },
+  { value: 'NONE', label: 'No login' },
+  { value: 'PENDING_ACTIVATION', label: 'Pending activation' },
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'SUSPENDED', label: 'Suspended' },
+  { value: 'DISABLED', label: 'Disabled' },
+];
+export type AccountFilter = 'NONE' | 'PENDING_ACTIVATION' | 'ACTIVE' | 'SUSPENDED' | 'DISABLED';
+export function accountFilter(v: string | undefined): AccountFilter | undefined {
+  return ACCOUNT_FILTER_OPTIONS.find((o) => o.value && o.value === v)?.value as
+    AccountFilter | undefined;
+}

@@ -5,6 +5,7 @@
  * A profile may exist without an account; `account` summarises the linked User (if any) and is
  * a separate lifecycle from the profile status. Dates are ISO `YYYY-MM-DD` (date-only).
  */
+import type { AccountState, StudentQualityFilter, TeacherQualityFilter } from './workspace.js';
 
 export type StudentStatus = 'ACTIVE' | 'INACTIVE' | 'WITHDRAWN' | 'GRADUATED';
 export type TeacherStatus = 'ACTIVE' | 'INACTIVE';
@@ -79,6 +80,8 @@ export interface StudentDetail extends StudentSummary {
     toStatus: StudentStatus;
     reason: string | null;
     at: string;
+    /** Display name of the staff member who made the change (null for imports/seed). */
+    actorName: string | null;
   }[];
   createdAt: string;
   updatedAt: string;
@@ -224,9 +227,18 @@ export interface StudentListQuery extends PeopleQuery {
   branchId?: string;
   gradeId?: string;
   sectionId?: string;
+  /** Phase 6: login-account state filter. */
+  account?: AccountState;
+  /** Phase 6: operational data-quality filter. */
+  quality?: StudentQualityFilter;
 }
 export interface TeacherListQuery extends PeopleQuery {
   status?: TeacherStatus;
+  account?: AccountState;
+  quality?: TeacherQualityFilter;
+}
+export interface ParentListQuery extends PeopleQuery {
+  account?: AccountState;
 }
 
 export interface ImportRowError {

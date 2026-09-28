@@ -1,4 +1,4 @@
-# RBAC (Phases 3–5)
+# RBAC (Phases 3–6)
 
 Source of truth: `packages/permissions/src/index.ts`. At startup the backend syncs the registry
 into `roles`, `permissions` and `role_permissions`. The sync runs under a PostgreSQL advisory
@@ -29,6 +29,8 @@ Permissions are resolved server-side on every request and are never placed in th
 | `teacher_assignment.read` / `.manage`     | TENANT   | Subject / class-teacher assignments           |
 | `bulk_import.read` / `bulk_import.manage` | TENANT   | Import jobs (also needs `<type>.manage`)      |
 | `people_account.manage`                   | TENANT   | Create / link login accounts for profiles     |
+| `people.read_all`                         | TENANT   | School-wide people reads (Phase 6 data scope) |
+| `school_activity.read`                    | TENANT   | Dashboard recent-activity feed (Phase 6)      |
 
 ## Roles (system roles; no custom roles yet)
 
@@ -98,3 +100,37 @@ Platform permissions are never granted to tenant roles (tested in `@acadlyx/perm
 
 `people_account.manage` is leadership-only, because it creates login identities. Guardian contact
 details in a student response are shown only to callers holding `parent.read`.
+
+## Phase 6 — people data scope
+
+`people.read_all` is a **data-scope** permission. It is granted to Principal, School Admin,
+Admission Officer and Accountant; Teachers do not have it.
+
+Without it, holders of `student.read`, `parent.read` or `enrollment.read` see only students (and
+those students' guardians, enrollments and class rosters) in sections where they hold an open
+assignment through their own ACTIVE teacher profile. This is enforced at resource level in the
+services, not in the UI, and is covered by e2e tests and a negative control. A teacher who is also
+a parent gains nothing school-wide from the parent role.
+
+Navigation visibility is derived from permissions (`apps/school-admin/src/lib/nav.ts`) and is never
+authorisation on its own.
+
+### Accountant and `people.read_all` (reviewed 2026-09-28)
+
+Accountant keeps `people.read_all`. The Master Blueprint is not in this repository, so the
+decision rests on the approved Phase 5 grant: Accountant has `student.read` and `enrollment.read`
+(fee structures by grade/section, see "Phase 4 grants"), and in Phase 5 those were school-wide.
+
+Without `people.read_all`, an Accountant (who teaches nothing) would see **no** students, which
+would silently revoke approved access. Keeping it restores exactly the Phase 5 view and nothing
+more:
+
+- Accountant has no `parent.read`, so no guardian profiles or contact details.
+- Class rosters hide guardian names.
+- There are no management permissions.
+- `school_activity.read` is not granted to Accountant.
+
+### `school_activity.read`
+
+Granted only to Principal and School Admin. It gates the humanised AuditLog feed on the dashboard
+(the API omits the block otherwise).

@@ -1,23 +1,31 @@
-import { FEATURE_REGISTRY } from '@acadlyx/tenant-config';
 import { Card } from '@acadlyx/web-ui';
 import Link from 'next/link';
 import { BrandedFrame } from '@/components/branded-frame';
+import { Dashboard } from '@/components/dashboard/dashboard';
 import { SchoolLogin } from '@/components/school-login';
-import { PeopleSummary } from '@/components/people/people-summary';
 import { SetupSummary } from '@/components/setup/setup-summary';
-import { SignOutButton } from '@/components/sign-out-button';
+import { LoadError } from '@/components/setup/states';
+import { AppShell } from '@/components/shell/app-shell';
+import { ContextBar } from '@/components/shell/context-bar';
 import { TenantProblem } from '@/components/tenant-problem';
+import { academicContext, contextQuery } from '@/lib/context';
 import { requireSchool } from '@/lib/school-page';
 import { currentSession } from '@/lib/server/session';
+import { load, setupContext } from '@/lib/setup';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * School home. Tenant resolution first (404/403 as in Phase 2); then either the branded sign-in
- * (no session) or the authenticated shell (identity, roles, school) with the Phase 4 school-setup
- * summary for users who may read the school structure. Real counts only — no invented metrics.
+ * (no session) or the operational dashboard inside the workspace shell (Phase 6): academic
+ * context, real counts, login access, records to review, recent imports and setup progress.
+ * Blocks follow the user's permissions — no invented metrics, no later-phase modules.
  */
-export default async function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ year?: string; branch?: string }>;
+}) {
   const tenant = await requireSchool();
   if ('problem' in tenant) return <TenantProblem kind={tenant.problem} host={tenant.host} />;
   const session = await currentSession();
@@ -43,72 +51,64 @@ export default async function HomePage() {
     );
   }
 
-  const { me } = session;
-  const labels = new Map(FEATURE_REGISTRY.map((f) => [f.key as string, f.label]));
-  const canSetup = me.permissions.includes('school.read');
-  const setup = canSetup ? await session.api.academic.setupStatus().catch(() => null) : null;
-  const canPeople = ['student.read', 'parent.read', 'teacher.read', 'bulk_import.read'].some((p) =>
-    me.permissions.includes(p as (typeof me.permissions)[number]),
-  );
-  const people = me.permissions.includes('student.read')
-    ? await session.api.people.summary().catch(() => null)
-    : null;
+  const ctx = await setupContext();
+  if (!ctx.ok) return <TenantProblem kind={ctx.problem.problem} host={ctx.problem.host} />;
+  const { me } = ctx;
+  const academic = await academicContext(ctx, await searchParams);
+  const query = contextQuery(academic);
+  const [dashboard, setup] = await Promise.all([
+    load(() => ctx.admin.dashboard(query)),
+    ctx.can('school.read') ? ctx.academic.setupStatus().catch(() => null) : null,
+  ]);
+  const contextParams = new URLSearchParams({
+    ...(academic.year ? { year: academic.year.id } : {}),
+    branch: academic.branch?.id ?? 'all',
+  }).toString();
   return (
-    <BrandedFrame
-      tenant={tenant}
-      nav={
-        <>
-          {canPeople ? (
-            <Link href="/people" className="text-white/90 hover:text-white">
-              People
-            </Link>
-          ) : null}
-          {canSetup ? (
-            <Link href="/settings/school" className="text-white/90 hover:text-white">
-              School setup
-            </Link>
-          ) : null}
-          <Link href="/security" className="text-white/90 hover:text-white">
-            Security
-          </Link>
-          <SignOutButton className="text-white/90 hover:text-white" />
-        </>
-      }
-    >
-      <h1 className="text-2xl font-semibold tracking-tight">Welcome, {me.displayName}</h1>
+    <AppShell tenant={tenant} can={ctx.can}>
+      <header>
+        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+        <p className="mt-1 text-sm text-slate-600">Welcome, {me.displayName}</p>
+      </header>
+      {academic.selectable ? (
+        <ContextBar
+          years={academic.years.map((y) => ({
+            id: y.id,
+            label: `${y.name}${y.isCurrent ? ' (current)' : ''}`,
+          }))}
+          branches={academic.branches.map((b) => ({
+            id: b.id,
+            label: `${b.name}${b.isActive ? '' : ' (inactive)'}`,
+          }))}
+          yearId={academic.year?.id ?? null}
+          branchId={academic.branch?.id ?? null}
+          noCurrentYear={academic.noCurrentYear}
+          canConfigureYears={ctx.can('academic_year.manage')}
+        />
+      ) : null}
+      {dashboard.ok ? (
+        <Dashboard d={dashboard.data} contextParams={contextParams} />
+      ) : (
+        <LoadError status={dashboard.status} />
+      )}
       {setup ? <SetupSummary status={setup} /> : null}
-      {people ? <PeopleSummary counts={people} /> : null}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card title="Signed in as">
+      <div>
+        <Card title="Your account">
           <p data-testid="me-name">{me.displayName}</p>
-          <p className="text-xs">
-            {[me.identifiers.email, me.identifiers.phone, me.identifiers.loginId]
-              .filter(Boolean)
-              .join(' · ')}
-          </p>
-        </Card>
-        <Card title="Your roles">
-          <ul data-testid="me-roles" className="flex flex-wrap gap-2">
+          <ul data-testid="me-roles" className="mt-2 flex flex-wrap gap-2">
             {me.roles.map((r) => (
               <li key={r} className="rounded bg-slate-100 px-2 py-0.5 text-xs">
-                {r}
+                {r.replace('_', ' ').toLowerCase()}
               </li>
             ))}
           </ul>
-        </Card>
-        <Card title="School">
-          <p className="font-mono" data-testid="tenant-key">
-            {tenant.key}
-          </p>
-          <p className="text-xs">
-            {tenant.enabledFeatures.map((k) => labels.get(k) ?? k).join(', ') ||
-              'No modules enabled yet'}
-          </p>
-          <p className="mt-2 text-xs text-slate-400">
-            Attendance, homework and other module screens are delivered in later phases.
+          <p className="mt-2 text-xs">
+            <Link href="/security" className="underline">
+              Security & sessions
+            </Link>
           </p>
         </Card>
       </div>
-    </BrandedFrame>
+    </AppShell>
   );
 }

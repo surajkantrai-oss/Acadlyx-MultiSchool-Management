@@ -116,3 +116,20 @@ export function fullName(p: {
 }): string {
   return [p.firstName, p.middleName, p.lastName].filter(Boolean).join(' ');
 }
+
+// ---- Phase 6: School Admin workspace ---------------------------------------------------------
+
+/** Profile login-account state ("NONE" = no linked login). */
+export const ACCOUNT_STATES = [
+  'NONE',
+  'PENDING_ACTIVATION',
+  'ACTIVE',
+  'SUSPENDED',
+  'DISABLED',
+] as const;
+
+/** Global search bounds: short queries are refused, long ones never reach the database. */
+export const SEARCH_MIN_LENGTH = 2;
+export const SEARCH_MAX_LENGTH = 64;
+/** Results per entity type in global search (links lead to the full, paginated lists). */
+export const SEARCH_LIMIT_PER_TYPE = 6;

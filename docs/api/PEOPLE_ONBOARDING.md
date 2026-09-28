@@ -66,7 +66,18 @@ Teachers import.
 
 ## Summary
 
-`GET /people/summary` (`student.read`) returns counts for the dashboard card.
+`GET /people/summary` returns school-wide counts. Since Phase 6 it requires `people.read_all`.
+
+## Phase 6 changes
+
+- **Teacher data scope:** without `people.read_all`, student, parent and enrollment reads are
+  limited to sections the caller actively teaches, and out-of-scope ids return 404.
+- **New list filters:**
+  - `account=NONE|PENDING_ACTIVATION|ACTIVE|SUSPENDED|DISABLED` on students, parents and teachers
+  - `quality=NO_ENROLLMENT|NO_GUARDIAN` on students (with an optional `academicYearId`)
+  - `quality=NO_ASSIGNMENT` on teachers
+- **Status history:** each entry includes `actorName`.
+- **Workspace endpoints:** see [../architecture/SCHOOL_ADMIN_PORTAL.md](../architecture/SCHOOL_ADMIN_PORTAL.md).
 
 ## School Admin BFF
 

@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { Breadcrumbs } from '@/components/shell/breadcrumbs';
 import { notFound } from 'next/navigation';
 import { ParentDetailView } from '@/components/people/parents';
 import { personName } from '@/components/people/shared';
@@ -20,11 +20,13 @@ export default async function ParentPage({ params }: { params: Promise<{ id: str
   }
   return (
     <>
-      <p className="text-sm">
-        <Link className="underline" href="/people/parents">
-          ← Parents
-        </Link>
-      </p>
+      <Breadcrumbs
+        items={[
+          { label: 'People' },
+          { label: 'Parents / guardians', href: '/people/parents' },
+          { label: personName(parent.data) },
+        ]}
+      />
       <PageHeader title={personName(parent.data)} />
       <ParentDetailView
         parent={parent.data}

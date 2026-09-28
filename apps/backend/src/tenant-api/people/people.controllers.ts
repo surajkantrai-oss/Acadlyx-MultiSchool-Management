@@ -58,6 +58,7 @@ import {
   LinkAccountDto,
   LinkGuardianDto,
   PagingQueryDto,
+  ParentListQueryDto,
   StudentListQueryDto,
   TeacherListQueryDto,
   TeacherStatusDto,
@@ -216,7 +217,7 @@ export class ParentsController {
 
   @RequirePermission('parent.read')
   @Get()
-  list(@Query() q: PagingQueryDto): Promise<Paginated<ParentSummary>> {
+  list(@Query() q: ParentListQueryDto): Promise<Paginated<ParentSummary>> {
     return this.parents.list(q);
   }
 
@@ -440,8 +441,8 @@ export class ImportsController {
 export class PeopleController {
   constructor(private readonly store: AcademicStore) {}
 
-  /** Real counts for the dashboard (no invented metrics). */
-  @RequirePermission('student.read')
+  /** Real school-wide counts (no invented metrics). Phase 6: requires school-wide people read. */
+  @RequirePermission('people.read_all')
   @Get('summary')
   summary(): Promise<PeopleCounts> {
     return this.store.run(async (tx) => {

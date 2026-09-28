@@ -23,16 +23,9 @@ export function SetupSummary({ status }: { status: SchoolSetupStatus }) {
     ['Subjects', c.subjects],
   ];
   return (
-    <section
-      aria-labelledby="setup-heading"
-      className="grid gap-4 lg:grid-cols-3"
-      data-testid="setup-summary"
-    >
+    <div className="grid gap-4 lg:grid-cols-3" data-testid="setup-summary">
       <div className="lg:col-span-2">
         <Card title="School structure">
-          <h2 id="setup-heading" className="sr-only">
-            School structure
-          </h2>
           <dl className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             {tiles.map(([label, value]) => (
               <div key={label} className="rounded-md bg-slate-50 p-3">
@@ -59,6 +52,6 @@ export function SetupSummary({ status }: { status: SchoolSetupStatus }) {
           ))}
         </ul>
       </Card>
-    </section>
+    </div>
   );
 }

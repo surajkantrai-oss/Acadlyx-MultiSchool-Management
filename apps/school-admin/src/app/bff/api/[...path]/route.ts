@@ -18,6 +18,9 @@ const ALLOWED: RegExp[] = [
   // Phase 5 — people, enrollment and bulk onboarding (permissions enforced by the API).
   /^(students|parents|teachers)(\/[\w-]+){0,4}$/,
   /^people\/summary$/,
+  // Phase 6 workspace read models (GET only on the API side).
+  /^workspace\/(dashboard|search|access)$/,
+  /^classes(\/[\w-]+)?$/,
   /^imports(\/(templates\/(STUDENTS|PARENTS|TEACHERS)(\/file)?|[\w-]+(\/(rows|errors\.csv|confirm|cancel))?))?$/,
 ];
 

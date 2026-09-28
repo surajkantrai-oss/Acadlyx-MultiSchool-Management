@@ -3,6 +3,7 @@ import { Badge, EmptyState } from '@acadlyx/web-ui';
 import Link from 'next/link';
 import { TYPE_LABEL, UploadImportForm } from '@/components/people/imports';
 import { Pager } from '@/components/people/shared';
+import { Breadcrumbs } from '@/components/shell/breadcrumbs';
 import { LoadError, NoAccess, PageHeader } from '@/components/setup/states';
 import { load, setupContext } from '@/lib/setup';
 
@@ -40,6 +41,7 @@ export default async function ImportsPage({
   const { items, total, totalPages } = list.data;
   return (
     <>
+      <Breadcrumbs items={[{ label: 'People' }, { label: 'Bulk import' }]} />
       <PageHeader title="Bulk import">
         Upload → check → preview → confirm → background processing → result.
       </PageHeader>

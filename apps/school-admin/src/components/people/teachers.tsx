@@ -18,6 +18,7 @@ import {
   useUnsavedWarning,
 } from '../setup/ui';
 import { AccountPanel } from './account-panel';
+import { ConfirmDialog } from '../shell/confirm-dialog';
 import { AccountBadge, Dl } from './shared';
 import { sectionOptions, type Structure } from './structure';
 
@@ -143,6 +144,7 @@ export function TeacherDetailView({
   can: { manage: boolean; assign: boolean; accounts: boolean };
 }) {
   const { busy, notice, setNotice, run } = useAction();
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
   const [editing, setEditing] = useState(false);
   const [type, setType] = useState<'SUBJECT_TEACHER' | 'CLASS_TEACHER'>('SUBJECT_TEACHER');
   const [dirty, setDirty] = useState(false);
@@ -224,18 +226,18 @@ export function TeacherDetailView({
                 <SmallButton onClick={() => setEditing(true)}>Edit profile</SmallButton>
                 <SmallButton
                   disabled={busy}
-                  onClick={() =>
-                    void run(
-                      () =>
-                        bffApi(`teachers/${t.id}/status`, {
-                          method: 'POST',
-                          body: { status: t.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' },
-                        }),
-                      t.status === 'ACTIVE'
-                        ? 'Teacher deactivated (login account unchanged).'
-                        : 'Teacher activated.',
-                    )
-                  }
+                  onClick={() => {
+                    if (t.status === 'ACTIVE') setConfirmDeactivate(true);
+                    else
+                      void run(
+                        () =>
+                          bffApi(`teachers/${t.id}/status`, {
+                            method: 'POST',
+                            body: { status: 'ACTIVE' },
+                          }),
+                        'Teacher activated.',
+                      );
+                  }}
                 >
                   {t.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
                 </SmallButton>
@@ -244,6 +246,27 @@ export function TeacherDetailView({
           </>
         )}
       </Card>
+      <ConfirmDialog
+        open={confirmDeactivate}
+        title="Deactivate this teacher?"
+        confirmLabel="Deactivate teacher"
+        busy={busy}
+        onCancel={() => {
+          setConfirmDeactivate(false);
+        }}
+        onConfirm={() => {
+          void run(
+            () =>
+              bffApi(`teachers/${t.id}/status`, { method: 'POST', body: { status: 'INACTIVE' } }),
+            'Teacher deactivated (login account unchanged).',
+          ).then(() => {
+            setConfirmDeactivate(false);
+          });
+        }}
+      >
+        An inactive teacher cannot be given new classes. Current and past assignments stay visible,
+        and the login account is not changed.
+      </ConfirmDialog>
       <Card title="Assignments">
         {current.length === 0 ? (
           <p className="text-sm">No current assignments.</p>

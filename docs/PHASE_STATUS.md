@@ -6,12 +6,27 @@
 | 2     | Multi-Tenancy & Platform Super Admin                       | **COMPLETE** (2026-09-26)                   |
 | 3     | Authentication, RBAC & Security                            | **COMPLETE** (2026-09-27, commit `1366890`) |
 | 4     | School & Academic Configuration                            | **COMPLETE** (2026-09-27, commit `acd41c5`) |
-| 5     | Students, Parents, Teachers & Bulk Onboarding              | **COMPLETE — awaiting review** (2026-09-27) |
-| 6–15  | Later phases per project plan (15 = production deployment) | NOT STARTED                                 |
+| 5     | Students, Parents, Teachers & Bulk Onboarding              | **COMPLETE** (2026-09-27, commit `64bc4e1`) |
+| 6     | School Admin Portal Core                                   | **COMPLETE — awaiting review** (2026-09-28) |
+| 7–15  | Later phases per project plan (15 = production deployment) | NOT STARTED                                 |
+
+## Phase 6 verification (2026-09-27)
+
+Uncommitted, awaiting review. HEAD is `64bc4e1` (Phase 5). No new migration.
+
+| Check                                                                                                                                | Result |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| Backend workspace API e2e (dashboard, activity feed, classes, search, access, teacher scope, A→B/B→C/C→A, same-tenant second school) | PASS   |
+| School Admin e2e (navigation, dashboard/context, classes, search, access, 404 copy, denial, school B isolation)                      | PASS   |
+| Negative controls (app scoping off → RLS holds; access permission bypass → fails; teacher scope removed → fails)                     | PASS   |
+| Fresh-database replay (roles → 4 migrations → generate → RBAC sync → seed ×2 → full tests)                                           | PASS   |
+| format / lint / typecheck / tests / build / mobile validate                                                                          | PASS   |
+| Browser walkthrough (SCHOOL_A admin + teacher; SCHOOL_B isolation; parent/student denial)                                            | PASS   |
+| iOS regression (branding, PIN login, session restore, logout)                                                                        | PASS   |
 
 ## Phase 5 verification (2026-09-27)
 
-Uncommitted, awaiting review. HEAD is `673f61d` (Phase 4 `acd41c5` + CI fixes).
+Committed as `64bc4e1`.
 
 | Check                                                                                                                 | Result |
 | --------------------------------------------------------------------------------------------------------------------- | ------ |

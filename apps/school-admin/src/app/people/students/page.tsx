@@ -1,7 +1,8 @@
 import { Badge, EmptyState } from '@acadlyx/web-ui';
 import Link from 'next/link';
 import { CreateStudentForm, StudentFilters } from '@/components/people/students';
-import { AccountBadge, Pager, personName } from '@/components/people/shared';
+import { accountFilter, AccountBadge, Pager, personName } from '@/components/people/shared';
+import { Breadcrumbs } from '@/components/shell/breadcrumbs';
 import { LoadError, NoAccess, PageHeader } from '@/components/setup/states';
 import { load, setupContext } from '@/lib/setup';
 
@@ -15,6 +16,8 @@ type Search = {
   sectionId?: string;
   gradeId?: string;
   branchId?: string;
+  account?: string;
+  quality?: string;
 };
 const UUID = /^[0-9a-f-]{36}$/i;
 const STATUSES = ['ACTIVE', 'INACTIVE', 'WITHDRAWN', 'GRADUATED'] as const;
@@ -30,6 +33,9 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
       .map((k) => [k, sp[k] && UUID.test(sp[k]) ? sp[k] : undefined])
       .filter(([, v]) => v),
   ) as Partial<Record<'academicYearId' | 'sectionId' | 'gradeId' | 'branchId', string>>;
+  const account = accountFilter(sp.account);
+  const quality =
+    sp.quality === 'NO_ENROLLMENT' || sp.quality === 'NO_GUARDIAN' ? sp.quality : undefined;
   const page = Math.max(1, Number(sp.page) || 1);
   const q = (sp.q ?? '').slice(0, 100);
   const canStructure =
@@ -42,6 +48,8 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
       ctx.people.students({
         ...(q ? { q } : {}),
         ...(status ? { status } : {}),
+        ...(account ? { account } : {}),
+        ...(quality ? { quality } : {}),
         ...ids,
         page,
         pageSize: 25,
@@ -64,22 +72,45 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
   const { items, total, totalPages } = list.data;
   return (
     <>
+      <Breadcrumbs items={[{ label: 'People' }, { label: 'Students' }]} />
       <PageHeader title="Students">
         School profiles, placement and guardians. Profiles are separate from login accounts.
       </PageHeader>
       {ctx.can('student.manage') ? (
         <CreateStudentForm structure={structure} canEnroll={ctx.can('enrollment.manage')} />
       ) : null}
-      <StudentFilters q={q} status={status ?? ''} structure={structure} selected={ids} />
+      <StudentFilters
+        q={q}
+        status={status ?? ''}
+        structure={structure}
+        selected={ids}
+        account={account ?? ''}
+        quality={quality ?? ''}
+      />
       {items.length === 0 ? (
         <EmptyState
           title={
-            q || status || Object.keys(ids).length
+            q || status || account || quality || Object.keys(ids).length
               ? 'No students match these filters'
               : 'No students yet'
           }
         >
-          {ctx.can('bulk_import.manage') ? 'Add students one by one or use Bulk import.' : null}
+          {!(q || status || account || quality || Object.keys(ids).length) &&
+          ctx.can('student.manage') ? (
+            <>
+              Add a student above
+              {ctx.can('bulk_import.manage') ? (
+                <>
+                  {' '}
+                  or{' '}
+                  <Link className="underline" href="/people/imports">
+                    import a CSV/XLSX file
+                  </Link>
+                </>
+              ) : null}
+              .
+            </>
+          ) : null}
         </EmptyState>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -148,7 +179,7 @@ export default async function StudentsPage({ searchParams }: { searchParams: Pro
         totalPages={totalPages}
         total={total}
         base="/people/students"
-        params={{ q, status, ...ids }}
+        params={{ q, status, account, quality, ...ids }}
       />
     </>
   );

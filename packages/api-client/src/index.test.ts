@@ -171,3 +171,28 @@ describe('people client (Phase 5)', () => {
     ]);
   });
 });
+
+describe('workspace client (Phase 6)', () => {
+  it('builds dashboard/search/access/class paths with encoded context', async () => {
+    const urls: string[] = [];
+    const fake = ((url: string, init: RequestInit) => {
+      urls.push(`${init.method ?? 'GET'} ${url}`);
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    }) as typeof fetch;
+    const api = createApiClient({ baseUrl: 'http://api.test/api/v1', fetch: fake });
+    await api.admin.dashboard({ academicYearId: 'y1', branchId: 'b1' });
+    await api.admin.search('asha & co');
+    await api.admin.access({ kind: 'parents', state: 'NONE', page: 2 });
+    await api.admin.classes({ gradeId: 'g1' });
+    await api.admin.class('s/1');
+    await api.people.students({ quality: 'NO_GUARDIAN', account: 'NONE' });
+    expect(urls).toEqual([
+      'GET http://api.test/api/v1/workspace/dashboard?academicYearId=y1&branchId=b1',
+      'GET http://api.test/api/v1/workspace/search?q=asha+%26+co',
+      'GET http://api.test/api/v1/workspace/access?kind=parents&state=NONE&page=2',
+      'GET http://api.test/api/v1/classes?gradeId=g1',
+      'GET http://api.test/api/v1/classes/s%2F1',
+      'GET http://api.test/api/v1/students?quality=NO_GUARDIAN&account=NONE',
+    ]);
+  });
+});

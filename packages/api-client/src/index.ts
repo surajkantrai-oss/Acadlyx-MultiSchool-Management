@@ -39,7 +39,15 @@ import type {
   ParentDetail,
   ParentSummary,
   PeopleCounts,
-  PeopleQuery,
+  ParentListQuery,
+  AccessQuery,
+  AccessRow,
+  ClassDetail,
+  ClassListQuery,
+  ClassSummary,
+  DashboardSummary,
+  SearchResults,
+  WorkspaceContextQuery,
   ProfileAccount,
   ProfileKind,
   StudentDetail,
@@ -434,7 +442,7 @@ export function createApiClient(options: ApiClientOptions) {
           body,
         }),
 
-      parents: (query: PeopleQuery = {}) =>
+      parents: (query: ParentListQuery = {}) =>
         request<Paginated<ParentSummary>>('GET', `parents${qs({ ...query })}`),
       parent: (id: string) => request<ParentDetail>('GET', `parents/${enc(id)}`),
       createParent: (body: CreateParentRequest) =>
@@ -481,6 +489,18 @@ export function createApiClient(options: ApiClientOptions) {
         request<ImportTemplate>('GET', `imports/templates/${type}`),
       confirmImport: (id: string) => request<ImportJob>('POST', `imports/${enc(id)}/confirm`),
       cancelImport: (id: string) => request<ImportJob>('POST', `imports/${enc(id)}/cancel`),
+    },
+
+    /** Phase 6 School Admin workspace read models (tenant-scoped, permission-aware). */
+    admin: {
+      dashboard: (query: WorkspaceContextQuery = {}) =>
+        request<DashboardSummary>('GET', `workspace/dashboard${qs({ ...query })}`),
+      search: (q: string) => request<SearchResults>('GET', `workspace/search${qs({ q })}`),
+      access: (query: AccessQuery) =>
+        request<Paginated<AccessRow>>('GET', `workspace/access${qs({ ...query })}`),
+      classes: (query: ClassListQuery = {}) =>
+        request<ClassSummary[]>('GET', `classes${qs({ ...query })}`),
+      class: (sectionId: string) => request<ClassDetail>('GET', `classes/${enc(sectionId)}`),
     },
 
     auth: (base: 'platform/auth' | 'auth', context: TenantRequestContext = {}) => {

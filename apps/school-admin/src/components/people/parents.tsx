@@ -18,6 +18,7 @@ import {
   useUnsavedWarning,
 } from '../setup/ui';
 import { AccountPanel } from './account-panel';
+import { ConfirmDialog } from '../shell/confirm-dialog';
 import { AccountBadge, Dl, personName } from './shared';
 
 function ParentFields({
@@ -131,6 +132,7 @@ export function ParentDetailView({
   can: { manage: boolean; accounts: boolean; students: boolean };
 }) {
   const { busy, notice, setNotice, run } = useAction();
+  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
   const [editing, setEditing] = useState(false);
   const [dirty, setDirty] = useState(false);
   useUnsavedWarning(dirty);
@@ -202,15 +204,14 @@ export function ParentDetailView({
                 <SmallButton onClick={() => setEditing(true)}>Edit profile</SmallButton>
                 <SmallButton
                   disabled={busy}
-                  onClick={() =>
-                    void run(
-                      () =>
-                        bffApi(`parents/${p.id}/${p.isActive ? 'deactivate' : 'activate'}`, {
-                          method: 'POST',
-                        }),
-                      p.isActive ? 'Parent deactivated (links kept).' : 'Parent activated.',
-                    )
-                  }
+                  onClick={() => {
+                    if (p.isActive) setConfirmDeactivate(true);
+                    else
+                      void run(
+                        () => bffApi(`parents/${p.id}/activate`, { method: 'POST' }),
+                        'Parent activated.',
+                      );
+                  }}
                 >
                   {p.isActive ? 'Deactivate' : 'Activate'}
                 </SmallButton>
@@ -219,6 +220,26 @@ export function ParentDetailView({
           </>
         )}
       </Card>
+      <ConfirmDialog
+        open={confirmDeactivate}
+        title="Deactivate this parent profile?"
+        confirmLabel="Deactivate"
+        busy={busy}
+        onCancel={() => {
+          setConfirmDeactivate(false);
+        }}
+        onConfirm={() => {
+          void run(
+            () => bffApi(`parents/${p.id}/deactivate`, { method: 'POST' }),
+            'Parent deactivated (links kept).',
+          ).then(() => {
+            setConfirmDeactivate(false);
+          });
+        }}
+      >
+        Existing links to children are kept, but the profile cannot be linked to more students while
+        inactive. The login account is not changed.
+      </ConfirmDialog>
       <Card title="Children">
         {p.children.length === 0 ? (
           <p className="text-sm">No linked students. Link from a student’s page.</p>

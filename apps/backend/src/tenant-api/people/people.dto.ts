@@ -1,4 +1,5 @@
 import {
+  ACCOUNT_STATES,
   GUARDIAN_RELATIONSHIPS,
   IMPORT_TYPES,
   isIsoDate,
@@ -13,10 +14,13 @@ import {
   TEACHER_STATUSES,
 } from '@acadlyx/validation';
 import type {
+  AccountState,
   GuardianRelationship,
   ImportType,
+  StudentQualityFilter,
   StudentStatus,
   TeacherAssignmentType,
+  TeacherQualityFilter,
   TeacherStatus,
 } from '@acadlyx/types';
 import { Transform, Type } from 'class-transformer';
@@ -258,6 +262,12 @@ export class StudentListQueryDto extends PagingQueryDto {
   @IsOptional() @IsUUID() branchId?: string;
   @IsOptional() @IsUUID() gradeId?: string;
   @IsOptional() @IsUUID() sectionId?: string;
+  @IsOptional() @IsIn(ACCOUNT_STATES) account?: AccountState;
+  @IsOptional() @IsIn(['NO_ENROLLMENT', 'NO_GUARDIAN']) quality?: StudentQualityFilter;
+}
+
+export class ParentListQueryDto extends PagingQueryDto {
+  @IsOptional() @IsIn(ACCOUNT_STATES) account?: AccountState;
 }
 
 export class CreateEnrollmentDto {
@@ -382,6 +392,8 @@ export class UpdateTeacherDto extends PartialNameFields {
 
 export class TeacherListQueryDto extends PagingQueryDto {
   @IsOptional() @IsIn(TEACHER_STATUSES) status?: TeacherStatus;
+  @IsOptional() @IsIn(ACCOUNT_STATES) account?: AccountState;
+  @IsOptional() @IsIn(['NO_ASSIGNMENT']) quality?: TeacherQualityFilter;
 }
 
 export class TeacherStatusDto {

@@ -138,3 +138,30 @@ describe('Phase 5 people grants', () => {
     ).toEqual(['enrollment.read', 'student.read']);
   });
 });
+
+describe('Phase 6 people data scope', () => {
+  it('school-wide people reads for administration; teachers are limited to assigned sections', () => {
+    for (const role of ['PRINCIPAL', 'SCHOOL_ADMIN', 'ADMISSION_OFFICER', 'ACCOUNTANT'])
+      expect(permissionsForRoles([role]), role).toContain('people.read_all');
+    for (const role of ['TEACHER', 'TRANSPORT_MANAGER', 'PARENT', 'STUDENT'])
+      expect(permissionsForRoles([role]), role).not.toContain('people.read_all');
+    // A teacher who is also a parent gains nothing school-wide from the parent role.
+    expect(permissionsForRoles(['TEACHER', 'PARENT'])).not.toContain('people.read_all');
+  });
+});
+
+describe('Phase 6 school activity', () => {
+  it('only leadership reads the activity feed', () => {
+    for (const role of ['PRINCIPAL', 'SCHOOL_ADMIN'])
+      expect(permissionsForRoles([role]), role).toContain('school_activity.read');
+    for (const role of [
+      'ADMISSION_OFFICER',
+      'ACCOUNTANT',
+      'TEACHER',
+      'TRANSPORT_MANAGER',
+      'PARENT',
+      'STUDENT',
+    ])
+      expect(permissionsForRoles([role]), role).not.toContain('school_activity.read');
+  });
+});

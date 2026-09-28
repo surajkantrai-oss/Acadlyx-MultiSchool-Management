@@ -156,6 +156,18 @@ views according to their permissions. The seed adds a fictional structure to eac
 See [docs/architecture/SCHOOL_ACADEMIC_MODEL.md](docs/architecture/SCHOOL_ACADEMIC_MODEL.md)
 and [docs/api/ACADEMIC_CONFIGURATION.md](docs/api/ACADEMIC_CONFIGURATION.md).
 
+### School Admin workspace (Phase 6)
+
+Signing in at http://school-a.localhost:4002 opens the School Admin workspace:
+
+- a dashboard with real counts for the chosen academic year and branch
+- Classes (section rosters with their students, teachers and subjects)
+- global search across students, guardians, teachers and classes
+- a Login access list for profiles without an active login
+
+Navigation follows your permissions. Teachers see only the classes they teach. See
+[docs/architecture/SCHOOL_ADMIN_PORTAL.md](docs/architecture/SCHOOL_ADMIN_PORTAL.md).
+
 ### People & bulk onboarding (Phase 5)
 
 http://school-a.localhost:4002/people manages students (with class placement, guardians and

@@ -30,6 +30,11 @@ Phase 5 people tables add:
 
 See [../architecture/PEOPLE_AND_ENROLLMENT_MODEL.md](../architecture/PEOPLE_AND_ENROLLMENT_MODEL.md).
 
+Phase 6 adds the teacher data scope (`people.read_all`, resource-level) and a leadership-only activity feed (`school_activity.read`) that shows humanised AuditLog events without raw payloads. It also adds global search,
+which never returns or matches contact fields and is bounded to 2–64 characters and 6 results per
+type. The academic-context cookie holds ids only and is re-validated against the school on every
+request. See [../architecture/SCHOOL_ADMIN_PORTAL.md](../architecture/SCHOOL_ADMIN_PORTAL.md).
+
 | Control            | Implementation                                                                                                                                           |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Security headers   | helmet, with a `default-src 'none'` CSP for the JSON API; `x-powered-by` disabled                                                                        |

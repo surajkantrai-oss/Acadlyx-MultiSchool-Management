@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { Breadcrumbs } from '@/components/shell/breadcrumbs';
 import { notFound } from 'next/navigation';
 import { personName } from '@/components/people/shared';
 import { TeacherDetailView } from '@/components/people/teachers';
@@ -30,11 +30,13 @@ export default async function TeacherPage({ params }: { params: Promise<{ id: st
     r && r.ok ? r.data : f;
   return (
     <>
-      <p className="text-sm">
-        <Link className="underline" href="/people/teachers">
-          ← Teachers
-        </Link>
-      </p>
+      <Breadcrumbs
+        items={[
+          { label: 'People' },
+          { label: 'Teachers', href: '/people/teachers' },
+          { label: personName(teacher.data) },
+        ]}
+      />
       <PageHeader title={personName(teacher.data)} />
       <TeacherDetailView
         teacher={teacher.data}

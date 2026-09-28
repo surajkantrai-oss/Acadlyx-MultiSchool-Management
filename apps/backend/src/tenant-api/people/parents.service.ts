@@ -6,6 +6,7 @@ import type { Prisma, School } from '../../generated/prisma/client.js';
 import type { TenantTransaction } from '../../tenancy/tenant-prisma.service.js';
 import { AcademicStore, changedFields, definedOnly } from '../academic/academic-store.js';
 import { PEOPLE_ERRORS } from './people-errors.js';
+import { accountFilter, parentScope, studentScope, withScope } from './people-scope.js';
 import {
   ACCOUNT_SELECT,
   fullNameSearch,
@@ -15,10 +16,16 @@ import {
   paging,
   toAccount,
 } from './people-mappers.js';
-import type { CreateParentDto, PagingQueryDto, UpdateParentDto } from './people.dto.js';
+import type { CreateParentDto, ParentListQueryDto, UpdateParentDto } from './people.dto.js';
 import { toGuardianLink } from './students.service.js';
 
-const LIST_INCLUDE = { user: ACCOUNT_SELECT, _count: { select: { children: true } } } as const;
+/** List/detail include whose child count respects the caller's people data scope. */
+function listInclude() {
+  return {
+    user: ACCOUNT_SELECT,
+    _count: { select: { children: { where: { student: studentScope() ?? {} } } } },
+  } as const;
+}
 
 /**
  * Parent/guardian profiles. Contact data is NOT unique (families share phones/emails); the only
@@ -28,13 +35,14 @@ const LIST_INCLUDE = { user: ACCOUNT_SELECT, _count: { select: { children: true 
 export class ParentsService {
   constructor(private readonly store: AcademicStore) {}
 
-  list(query: PagingQueryDto & { active?: boolean }): Promise<Paginated<ParentSummary>> {
+  list(query: ParentListQueryDto & { active?: boolean }): Promise<Paginated<ParentSummary>> {
     const { page, pageSize, skip, take } = paging(query);
     return this.store.run(async (tx) => {
       const school = await this.store.school(tx);
       const digits = (query.q ?? '').replace(/\D/g, '');
-      const where: Prisma.ParentWhereInput = {
+      const base: Prisma.ParentWhereInput = {
         schoolId: school.id,
+        ...accountFilter(query.account),
         ...(query.q
           ? {
               OR: [
@@ -47,11 +55,12 @@ export class ParentsService {
             }
           : {}),
       };
+      const where = withScope(base, parentScope());
       const [total, rows] = await Promise.all([
         tx.parent.count({ where }),
         tx.parent.findMany({
           where,
-          include: LIST_INCLUDE,
+          include: listInclude(),
           orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }, { id: 'asc' }],
           skip,
           take,
@@ -61,8 +70,17 @@ export class ParentsService {
     });
   }
 
+  /** Read path: applies the people data scope (a teacher sees only their students' guardians). */
   get(id: string): Promise<ParentDetail> {
-    return this.store.run((tx) => this.detail(tx, id));
+    return this.store.run(async (tx) => {
+      const school = await this.store.school(tx);
+      const found = await tx.parent.findFirst({
+        where: withScope<Prisma.ParentWhereInput>({ id, schoolId: school.id }, parentScope()),
+        select: { id: true },
+      });
+      if (!found) throw PEOPLE_ERRORS.parentNotFound();
+      return this.detail(tx, id);
+    });
   }
 
   create(dto: CreateParentDto): Promise<ParentDetail> {
@@ -159,8 +177,13 @@ export class ParentsService {
     const r = await tx.parent.findFirst({
       where: { id, schoolId: school.id },
       include: {
-        ...LIST_INCLUDE,
-        children: { include: { student: true }, orderBy: { createdAt: 'asc' } },
+        ...listInclude(),
+        // Children outside the caller's data scope are never listed (null scope = all).
+        children: {
+          where: { student: studentScope() ?? {} },
+          include: { student: true },
+          orderBy: { createdAt: 'asc' },
+        },
       },
     });
     if (!r) throw PEOPLE_ERRORS.parentNotFound();
@@ -193,7 +216,9 @@ export class ParentsService {
   }
 }
 
-function summary(r: Prisma.ParentGetPayload<{ include: typeof LIST_INCLUDE }>): ParentSummary {
+function summary(
+  r: Prisma.ParentGetPayload<{ include: ReturnType<typeof listInclude> }>,
+): ParentSummary {
   return {
     id: r.id,
     parentCode: r.parentCode,
