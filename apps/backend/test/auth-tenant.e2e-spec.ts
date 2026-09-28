@@ -165,7 +165,12 @@ describe('Tenant authentication (e2e)', () => {
       // teachers' read-only academic structure); PARENT adds nothing beyond the workspace.
       expect(me.permissions).toEqual(permissionsForRoles(['TEACHER', 'PARENT']));
       expect(me.permissions).toEqual(permissionsForRoles(['TEACHER']));
-      expect(me.permissions.some((p) => p.endsWith('.manage'))).toBe(false);
+      // Phase 7: a teacher's only manage permissions are the resource-scoped class operations.
+      expect(me.permissions.filter((p) => p.endsWith('.manage')).sort()).toEqual([
+        'assignment.manage',
+        'attendance.manage',
+        'homework.manage',
+      ]);
       expect(me.pinAllowed).toBe(false); // TEACHER forbids PIN → most restrictive wins
       const session = await prisma.session.findUniqueOrThrow({ where: { id: tokens.sessionId } });
       const days = (session.absoluteExpiresAt.getTime() - session.createdAt.getTime()) / 86_400_000;

@@ -659,8 +659,9 @@ model Branch {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  school   School    @relation(fields: [schoolId, tenantId], references: [id, tenantId], onDelete: Restrict)
-  sections Section[]
+  school           School            @relation(fields: [schoolId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  sections         Section[]
+  timetablePeriods TimetablePeriod[]
 
   @@unique([schoolId, code])
   @@unique([id, schoolId, tenantId])
@@ -682,8 +683,10 @@ model AcademicYear {
   createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  school   School    @relation(fields: [schoolId, tenantId], references: [id, tenantId], onDelete: Restrict)
-  sections Section[]
+  school             School              @relation(fields: [schoolId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  sections           Section[]
+  attendanceSessions AttendanceSession[]
+  timetablePeriods   TimetablePeriod[]
 
   @@unique([schoolId, name])
   @@unique([id, schoolId, tenantId])
@@ -732,16 +735,22 @@ model Section {
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  branch       Branch              @relation(fields: [branchId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
-  academicYear AcademicYear        @relation(fields: [academicYearId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
-  grade        Grade               @relation(fields: [gradeId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
-  enrollments  StudentEnrollment[]
-  assignments  TeacherAssignment[]
+  branch             Branch              @relation(fields: [branchId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  academicYear       AcademicYear        @relation(fields: [academicYearId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  grade              Grade               @relation(fields: [gradeId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  enrollments        StudentEnrollment[]
+  assignments        TeacherAssignment[]
+  attendanceSessions AttendanceSession[]
+  homework           Homework[]
+  classAssignments   Assignment[]
+  timetableEntries   TimetableEntry[]
 
   @@unique([branchId, academicYearId, gradeId, code])
   @@unique([id, schoolId, tenantId])
   /// Phase 5: lets an enrollment pin its denormalised academic_year_id to its section's year.
   @@unique([id, academicYearId, schoolId, tenantId])
+  /// Phase 7: lets a timetable entry pin branch + year to its section's.
+  @@unique([id, branchId, academicYearId, schoolId, tenantId])
   @@index([tenantId, gradeId])
   @@index([tenantId, branchId, academicYearId])
   @@index([academicYearId, schoolId, tenantId])
@@ -760,9 +769,12 @@ model Subject {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  school        School              @relation(fields: [schoolId, tenantId], references: [id, tenantId], onDelete: Restrict)
-  gradeSubjects GradeSubject[]
-  assignments   TeacherAssignment[]
+  school           School              @relation(fields: [schoolId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  gradeSubjects    GradeSubject[]
+  assignments      TeacherAssignment[]
+  homework         Homework[]
+  classAssignments Assignment[]
+  timetableEntries TimetableEntry[]
 
   @@unique([schoolId, code])
   @@unique([id, schoolId, tenantId])
@@ -902,6 +914,7 @@ model Student {
   guardians     StudentGuardian[]
   enrollments   StudentEnrollment[]
   statusHistory StudentStatusHistory[]
+  attendance    AttendanceRecord[]
 
   /// One Student profile per login User (a user id belongs to exactly one tenant).
   @@unique([userId, tenantId])
@@ -1000,9 +1013,12 @@ model Teacher {
   createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  school      School              @relation(fields: [schoolId, tenantId], references: [id, tenantId], onDelete: Restrict)
-  user        User?               @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict)
-  assignments TeacherAssignment[]
+  school           School              @relation(fields: [schoolId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  user             User?               @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  assignments      TeacherAssignment[]
+  homework         Homework[]
+  classAssignments Assignment[]
+  timetableEntries TimetableEntry[]
 
   @@unique([userId, tenantId])
   @@unique([schoolId, employeeId])
@@ -1121,4 +1137,237 @@ model BulkImportRow {
   @@index([jobId, status])
   @@index([tenantId])
   @@map("bulk_import_rows")
+}
+
+// ---- Phase 7: attendance, homework, assignments & timetable --------------------------------------
+
+/// Approved statuses (decision B). No HALF_DAY in Phase 7.
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+
+  @@map("attendance_status")
+}
+
+/// Homework lifecycle (decision G).
+enum HomeworkStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+
+  @@map("homework_status")
+}
+
+/// Assignment lifecycle (decision H). Submissions arrive in Phase 8 (decision I).
+enum AssignmentStatus {
+  DRAFT
+  PUBLISHED
+  CLOSED
+  ARCHIVED
+
+  @@map("assignment_status")
+}
+
+/// Timetable period kinds (decision P); only INSTRUCTIONAL periods take entries.
+enum TimetablePeriodType {
+  INSTRUCTIONAL
+  BREAK
+  LUNCH
+  ASSEMBLY
+
+  @@map("timetable_period_type")
+}
+
+/// One daily attendance session per Section + school-local date (decision A).
+model AttendanceSession {
+  id              String   @id @default(uuid(7)) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  schoolId        String   @map("school_id") @db.Uuid
+  sectionId       String   @map("section_id") @db.Uuid
+  academicYearId  String   @map("academic_year_id") @db.Uuid
+  /// School-local calendar date (branch timezone), date-only.
+  date            DateTime @db.Date
+  /// Optimistic concurrency token; every save increments it.
+  version         Int      @default(1)
+  createdByUserId String   @map("created_by_user_id") @db.Uuid
+  updatedByUserId String   @map("updated_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  section      Section            @relation(fields: [sectionId, academicYearId, schoolId, tenantId], references: [id, academicYearId, schoolId, tenantId], onDelete: Restrict)
+  academicYear AcademicYear       @relation(fields: [academicYearId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  records      AttendanceRecord[]
+
+  @@unique([sectionId, date])
+  @@unique([id, schoolId, tenantId])
+  @@index([tenantId, schoolId, date])
+  @@index([academicYearId, schoolId, tenantId])
+  @@map("attendance_sessions")
+}
+
+model AttendanceRecord {
+  id        String           @id @default(uuid(7)) @db.Uuid
+  tenantId  String           @map("tenant_id") @db.Uuid
+  schoolId  String           @map("school_id") @db.Uuid
+  sessionId String           @map("session_id") @db.Uuid
+  studentId String           @map("student_id") @db.Uuid
+  status    AttendanceStatus
+  /// Brief operational context only (≤ 200 chars); never medical detail.
+  note      String?          @db.VarChar(200)
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  session AttendanceSession         @relation(fields: [sessionId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  student Student                   @relation(fields: [studentId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  history AttendanceRecordHistory[]
+
+  @@unique([sessionId, studentId])
+  @@unique([id, schoolId, tenantId])
+  @@index([studentId, status])
+  @@index([tenantId])
+  @@map("attendance_records")
+}
+
+/// Append-only trail of every attendance value (initial mark and each correction) — decision E.
+model AttendanceRecordHistory {
+  id              String            @id @default(uuid(7)) @db.Uuid
+  tenantId        String            @map("tenant_id") @db.Uuid
+  schoolId        String            @map("school_id") @db.Uuid
+  recordId        String            @map("record_id") @db.Uuid
+  fromStatus      AttendanceStatus? @map("from_status")
+  toStatus        AttendanceStatus  @map("to_status")
+  fromNote        String?           @map("from_note") @db.VarChar(200)
+  toNote          String?           @map("to_note") @db.VarChar(200)
+  changedByUserId String            @map("changed_by_user_id") @db.Uuid
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  record AttendanceRecord @relation(fields: [recordId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+
+  @@index([recordId, createdAt])
+  @@index([tenantId])
+  @@map("attendance_record_history")
+}
+
+/// Lightweight class task for a Section + Subject (decision F). No student submissions.
+model Homework {
+  id              String         @id @default(uuid(7)) @db.Uuid
+  tenantId        String         @map("tenant_id") @db.Uuid
+  schoolId        String         @map("school_id") @db.Uuid
+  sectionId       String         @map("section_id") @db.Uuid
+  subjectId       String         @map("subject_id") @db.Uuid
+  /// Teacher profile responsible (the author when a teacher creates it).
+  teacherId       String?        @map("teacher_id") @db.Uuid
+  title           String         @db.VarChar(200)
+  instructions    String?        @db.VarChar(5000)
+  /// School-local calendar dates (decision L).
+  assignedDate    DateTime       @map("assigned_date") @db.Date
+  dueDate         DateTime       @map("due_date") @db.Date
+  status          HomeworkStatus @default(DRAFT)
+  version         Int            @default(1)
+  createdByUserId String         @map("created_by_user_id") @db.Uuid
+  publishedAt     DateTime?      @map("published_at") @db.Timestamptz(3)
+  archivedAt      DateTime?      @map("archived_at") @db.Timestamptz(3)
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  section Section  @relation(fields: [sectionId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  subject Subject  @relation(fields: [subjectId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  teacher Teacher? @relation(fields: [teacherId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+
+  @@index([sectionId, status, dueDate])
+  @@index([teacherId, status])
+  @@index([tenantId, schoolId, status, dueDate])
+  @@map("homework")
+}
+
+/// Formal task for a Section + Subject (decision F); submissions are Phase 8 (decision I).
+model Assignment {
+  id              String           @id @default(uuid(7)) @db.Uuid
+  tenantId        String           @map("tenant_id") @db.Uuid
+  schoolId        String           @map("school_id") @db.Uuid
+  sectionId       String           @map("section_id") @db.Uuid
+  subjectId       String           @map("subject_id") @db.Uuid
+  teacherId       String?          @map("teacher_id") @db.Uuid
+  title           String           @db.VarChar(200)
+  instructions    String?          @db.VarChar(5000)
+  assignedDate    DateTime         @map("assigned_date") @db.Date
+  dueDate         DateTime         @map("due_date") @db.Date
+  status          AssignmentStatus @default(DRAFT)
+  version         Int              @default(1)
+  createdByUserId String           @map("created_by_user_id") @db.Uuid
+  publishedAt     DateTime?        @map("published_at") @db.Timestamptz(3)
+  closedAt        DateTime?        @map("closed_at") @db.Timestamptz(3)
+  archivedAt      DateTime?        @map("archived_at") @db.Timestamptz(3)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  section Section  @relation(fields: [sectionId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  subject Subject  @relation(fields: [subjectId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  teacher Teacher? @relation(fields: [teacherId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+
+  @@index([sectionId, status, dueDate])
+  @@index([teacherId, status])
+  @@index([tenantId, schoolId, status, dueDate])
+  @@map("assignments")
+}
+
+/// Named bell-schedule period for one Branch + AcademicYear (decisions M, N, P).
+model TimetablePeriod {
+  id             String              @id @default(uuid(7)) @db.Uuid
+  tenantId       String              @map("tenant_id") @db.Uuid
+  schoolId       String              @map("school_id") @db.Uuid
+  branchId       String              @map("branch_id") @db.Uuid
+  academicYearId String              @map("academic_year_id") @db.Uuid
+  name           String              @db.VarChar(60)
+  type           TimetablePeriodType @default(INSTRUCTIONAL)
+  /// Local wall-clock times in the branch timezone.
+  startTime      DateTime            @map("start_time") @db.Time(0)
+  endTime        DateTime            @map("end_time") @db.Time(0)
+  displayOrder   Int                 @map("display_order")
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  branch       Branch           @relation(fields: [branchId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  academicYear AcademicYear     @relation(fields: [academicYearId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  entries      TimetableEntry[]
+
+  @@unique([branchId, academicYearId, name])
+  @@unique([id, schoolId, tenantId])
+  /// Entries copy branch/year/type/times from their period through this key (ON UPDATE CASCADE).
+  @@unique([id, branchId, academicYearId, type, startTime, endTime, schoolId, tenantId])
+  @@index([tenantId, schoolId])
+  @@map("timetable_periods")
+}
+
+/// One recurring weekly lesson: Section × weekday × period → Subject + Teacher (decision O).
+model TimetableEntry {
+  id             String              @id @default(uuid(7)) @db.Uuid
+  tenantId       String              @map("tenant_id") @db.Uuid
+  schoolId       String              @map("school_id") @db.Uuid
+  branchId       String              @map("branch_id") @db.Uuid
+  academicYearId String              @map("academic_year_id") @db.Uuid
+  sectionId      String              @map("section_id") @db.Uuid
+  periodId       String              @map("period_id") @db.Uuid
+  /// Copied from the period (kept in sync by the composite FK, ON UPDATE CASCADE).
+  periodType     TimetablePeriodType @map("period_type")
+  startTime      DateTime            @map("start_time") @db.Time(0)
+  endTime        DateTime            @map("end_time") @db.Time(0)
+  weekday        Weekday
+  subjectId      String              @map("subject_id") @db.Uuid
+  teacherId      String              @map("teacher_id") @db.Uuid
+  createdAt      DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  section Section         @relation(fields: [sectionId, branchId, academicYearId, schoolId, tenantId], references: [id, branchId, academicYearId, schoolId, tenantId], onDelete: Restrict)
+  period  TimetablePeriod @relation(fields: [periodId, branchId, academicYearId, periodType, startTime, endTime, schoolId, tenantId], references: [id, branchId, academicYearId, type, startTime, endTime, schoolId, tenantId], onDelete: Restrict, onUpdate: Cascade)
+  subject Subject         @relation(fields: [subjectId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  teacher Teacher         @relation(fields: [teacherId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+
+  @@unique([sectionId, weekday, periodId])
+  @@index([teacherId, weekday])
+  @@index([periodId])
+  @@index([tenantId, schoolId, academicYearId])
+  @@map("timetable_entries")
 }

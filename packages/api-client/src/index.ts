@@ -40,6 +40,25 @@ import type {
   ParentSummary,
   PeopleCounts,
   ParentListQuery,
+  AttendanceClass,
+  AttendanceHistoryDay,
+  AttendanceRecordChange,
+  AttendanceSheet,
+  ClassworkItem,
+  ClassworkKind,
+  ClassworkQuery,
+  ClassworkTarget,
+  SaveAttendanceRequest,
+  SaveClassworkRequest,
+  SaveTimetableEntryRequest,
+  SaveTimetablePeriodRequest,
+  StudentAttendanceSummary,
+  TimetableEntry,
+  TimetablePeriod,
+  TimetableWeek,
+  UpdateClassworkRequest,
+  UpdateTimetableEntryRequest,
+  UpdateTimetablePeriodRequest,
   AccessQuery,
   AccessRow,
   ClassDetail,
@@ -489,6 +508,81 @@ export function createApiClient(options: ApiClientOptions) {
         request<ImportTemplate>('GET', `imports/templates/${type}`),
       confirmImport: (id: string) => request<ImportJob>('POST', `imports/${enc(id)}/confirm`),
       cancelImport: (id: string) => request<ImportJob>('POST', `imports/${enc(id)}/cancel`),
+    },
+
+    /** Phase 7 academic operations (tenant-scoped; teachers limited to assigned classes/subjects). */
+    ops: {
+      attendanceClasses: (query: { academicYearId?: string; branchId?: string } = {}) =>
+        request<AttendanceClass[]>('GET', `attendance/classes${qs({ ...query })}`),
+      attendanceSheet: (sectionId: string, date?: string) =>
+        request<AttendanceSheet>('GET', `attendance/sections/${enc(sectionId)}${qs({ date })}`),
+      attendanceHistory: (
+        sectionId: string,
+        query: { page?: number; pageSize?: number; from?: string; to?: string } = {},
+      ) =>
+        request<Paginated<AttendanceHistoryDay>>(
+          'GET',
+          `attendance/sections/${enc(sectionId)}/history${qs({ ...query })}`,
+        ),
+      attendanceChanges: (sectionId: string, date: string) =>
+        request<AttendanceRecordChange[]>(
+          'GET',
+          `attendance/sections/${enc(sectionId)}/changes${qs({ date })}`,
+        ),
+      saveAttendance: (body: SaveAttendanceRequest) =>
+        request<AttendanceSheet>('PUT', 'attendance', { body }),
+      studentAttendance: (studentId: string, academicYearId?: string) =>
+        request<StudentAttendanceSummary | null>(
+          'GET',
+          `attendance/students/${enc(studentId)}${qs({ academicYearId })}`,
+        ),
+
+      classwork: (kind: ClassworkKind, query: ClassworkQuery = {}) =>
+        request<Paginated<ClassworkItem>>('GET', `${kind}${qs({ ...query })}`),
+      classworkItem: (kind: ClassworkKind, id: string) =>
+        request<ClassworkItem>('GET', `${kind}/${enc(id)}`),
+      classworkTargets: (kind: ClassworkKind) =>
+        request<ClassworkTarget[]>('GET', `${kind}/targets`),
+      createClasswork: (kind: ClassworkKind, body: SaveClassworkRequest) =>
+        request<ClassworkItem>('POST', kind, { body }),
+      updateClasswork: (kind: ClassworkKind, id: string, body: UpdateClassworkRequest) =>
+        request<ClassworkItem>('PATCH', `${kind}/${enc(id)}`, { body }),
+      transitionClasswork: (
+        kind: ClassworkKind,
+        id: string,
+        action: 'publish' | 'close' | 'archive',
+        expectedVersion: number,
+      ) =>
+        request<ClassworkItem>('POST', `${kind}/${enc(id)}/${action}`, {
+          body: { expectedVersion },
+        }),
+      deleteClasswork: (kind: ClassworkKind, id: string) =>
+        request<null>('DELETE', `${kind}/${enc(id)}`),
+
+      periods: (branchId: string, academicYearId: string) =>
+        request<TimetablePeriod[]>('GET', `timetable/periods${qs({ branchId, academicYearId })}`),
+      createPeriod: (body: SaveTimetablePeriodRequest) =>
+        request<TimetablePeriod>('POST', 'timetable/periods', { body }),
+      updatePeriod: (id: string, body: UpdateTimetablePeriodRequest) =>
+        request<TimetablePeriod>('PATCH', `timetable/periods/${enc(id)}`, { body }),
+      deletePeriod: (id: string) => request<null>('DELETE', `timetable/periods/${enc(id)}`),
+      reorderPeriods: (branchId: string, academicYearId: string, ids: string[]) =>
+        request<TimetablePeriod[]>('PUT', 'timetable/periods/order', {
+          body: { branchId, academicYearId, ids },
+        }),
+      createEntry: (body: SaveTimetableEntryRequest) =>
+        request<TimetableEntry>('POST', 'timetable/entries', { body }),
+      updateEntry: (id: string, body: UpdateTimetableEntryRequest) =>
+        request<TimetableEntry>('PATCH', `timetable/entries/${enc(id)}`, { body }),
+      deleteEntry: (id: string) => request<null>('DELETE', `timetable/entries/${enc(id)}`),
+      sectionWeek: (sectionId: string) =>
+        request<TimetableWeek>('GET', `timetable/sections/${enc(sectionId)}`),
+      /** `teacherId` may be 'me' for the signed-in teacher's own week. */
+      teacherWeek: (teacherId: string, academicYearId?: string) =>
+        request<TimetableWeek>(
+          'GET',
+          `timetable/teachers/${enc(teacherId)}${qs({ academicYearId })}`,
+        ),
     },
 
     /** Phase 6 School Admin workspace read models (tenant-scoped, permission-aware). */

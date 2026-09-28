@@ -82,6 +82,26 @@ Model: [../architecture/PEOPLE_AND_ENROLLMENT_MODEL.md](../architecture/PEOPLE_A
 `DEFERRABLE`. Those lines were removed from the generated SQL. Review this whenever a future
 migration is generated.
 
+### `20260928100000_phase_7_attendance_homework_assignments_timetable`
+
+Models: [attendance](../architecture/ATTENDANCE_MODEL.md),
+[homework & assignments](../architecture/ACADEMIC_WORK_MODEL.md),
+[timetable](../architecture/TIMETABLE_MODEL.md). There is no Phase 6 migration.
+
+| Kind                                     | Objects                                                                                                                                                                                                                                                                                                                                                     |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Enums                                    | `attendance_status`, `homework_status`, `assignment_status`, `timetable_period_type`                                                                                                                                                                                                                                                                        |
+| Tables                                   | `attendance_sessions`, `attendance_records`, `attendance_record_history`, `homework`, `assignments`, `timetable_periods`, `timetable_entries`                                                                                                                                                                                                               |
+| Unique                                   | `attendance_sessions (section_id, date)`, `attendance_records (session_id, student_id)`, `timetable_periods (branch_id, academic_year_id, name)`, `timetable_entries (section_id, weekday, period_id)`, new `sections (id, branch_id, academic_year_id, school_id, tenant_id)`; deferrable `timetable_periods (branch_id, academic_year_id, display_order)` |
+| Composite FKs                            | `(…_id, school_id, tenant_id)` everywhere; session → `sections (id, academic_year_id, …)`; entry → section `(id, branch_id, academic_year_id, …)`; entry → period `(id, branch_id, academic_year_id, type, start_time, end_time, …)` **ON UPDATE CASCADE**; ON DELETE RESTRICT                                                                              |
+| Exclusion (btree_gist, no new extension) | `timetable_periods_no_overlap` (branch, year, time range), `timetable_entries_teacher_no_overlap` (teacher, year, weekday, time range)                                                                                                                                                                                                                      |
+| CHECK                                    | versions ≥ 1, due ≥ assigned, published/closed/archived timestamps consistent with status, non-blank titles/names/notes, period start < end, entries only on INSTRUCTIONAL periods, history must change something                                                                                                                                           |
+| RLS                                      | ENABLE + FORCE + `tenant_isolation` on all 7 tables; RESTRICTIVE `draft_only_delete` on `homework` and `assignments`                                                                                                                                                                                                                                        |
+| Grants                                   | SELECT/INSERT all; column-level UPDATE only (no scope/identity columns); `attendance_record_history` append-only; no DELETE on attendance; DELETE on homework/assignments (drafts only, via policy) and timetable rows                                                                                                                                      |
+
+**Drift note:** as in Phase 5, the generated diff tried to drop the Phase 4 deferrable uniques.
+Those two lines were removed before applying.
+
 Migrations are immutable once applied to a persistent database. Corrections go in a new
 migration.
 

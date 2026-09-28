@@ -216,7 +216,8 @@ describe('School Admin — workspace (Phase 6)', () => {
       'dashboard-imports',
     ])
       expect(html, id).toContain(`data-testid="${id}"`);
-    expect(html).not.toMatch(/Attendance %|Fees|Exam|Homework/);
+    // No cards for modules that do not exist yet (Phase 7 made homework/attendance real).
+    expect(html).not.toMatch(/Fees|Exam|Results|Report card/);
     const dash = await api(admin, 'workspace/dashboard');
     expect(dash.status).toBe(200);
     expect(dash.json).toMatchObject({

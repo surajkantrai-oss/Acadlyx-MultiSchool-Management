@@ -33,3 +33,4 @@ export * from './auth.js';
 export * from './academic.js';
 export * from './people.js';
 export * from './workspace.js';
+export * from './operations.js';

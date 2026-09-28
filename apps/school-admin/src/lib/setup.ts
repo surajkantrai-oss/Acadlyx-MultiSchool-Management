@@ -25,6 +25,7 @@ export const setupContext = cache(async () => {
     academic: session.api.academic,
     people: session.api.people,
     admin: session.api.admin,
+    ops: session.api.ops,
     can: (permission: PermissionKey) => permissions.has(permission),
   } as const;
 });

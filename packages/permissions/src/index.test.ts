@@ -11,6 +11,9 @@ import {
   TENANT_ROLE_KEYS,
 } from './index.js';
 
+/** Phase 7 per-class operations teachers may perform (scoped by TeacherAssignment). */
+const CLASS_OPERATIONS: string[] = ['attendance.manage', 'homework.manage', 'assignment.manage'];
+
 describe('RBAC registry', () => {
   it('defines the approved system roles with unique keys and valid permissions', () => {
     expect(ROLE_REGISTRY.map((r) => r.key)).toEqual([
@@ -69,7 +72,13 @@ describe('RBAC registry', () => {
       expect(permissionsForRoles([role])).toEqual(expect.arrayContaining(tenantManage));
     }
     for (const role of ['ACCOUNTANT', 'TEACHER', 'TRANSPORT_MANAGER']) {
-      expect(permissionsForRoles([role]).filter((k) => k.endsWith('.manage'))).toEqual([]);
+      // Phase 7 class operations (attendance/homework/assignment) are the only teacher manage
+      // permissions, and they are resource-scoped to assigned sections/subjects.
+      expect(
+        permissionsForRoles([role]).filter(
+          (k) => k.endsWith('.manage') && !CLASS_OPERATIONS.includes(k),
+        ),
+      ).toEqual([]);
     }
     expect(permissionsForRoles(['TEACHER'])).toEqual(
       expect.arrayContaining(['grade.read', 'section.read', 'subject.read']),
@@ -131,7 +140,9 @@ describe('Phase 5 people grants', () => {
     expect(teacher).toEqual(
       expect.arrayContaining(['student.read', 'parent.read', 'teacher_assignment.read']),
     );
-    expect(teacher.filter((k) => k.endsWith('.manage'))).toEqual([]);
+    expect(teacher.filter((k) => k.endsWith('.manage') && !CLASS_OPERATIONS.includes(k))).toEqual(
+      [],
+    );
     expect(teacher).not.toContain('bulk_import.read');
     expect(
       permissionsForRoles(['ACCOUNTANT']).filter((k) => /^(student|enrollment)\./.test(k)),
@@ -163,5 +174,45 @@ describe('Phase 6 school activity', () => {
       'STUDENT',
     ])
       expect(permissionsForRoles([role]), role).not.toContain('school_activity.read');
+  });
+});
+
+describe('Phase 7 academic operations', () => {
+  it('leadership manages everything; teachers operate (not configure); others get nothing', () => {
+    const ops = [
+      'attendance.read',
+      'attendance.manage',
+      'attendance.backdate',
+      'homework.read',
+      'homework.manage',
+      'assignment.read',
+      'assignment.manage',
+      'timetable.read',
+      'timetable.manage',
+    ];
+    for (const role of ['PRINCIPAL', 'SCHOOL_ADMIN'])
+      expect(permissionsForRoles([role]), role).toEqual(expect.arrayContaining(ops));
+    const teacher = permissionsForRoles(['TEACHER']);
+    expect(teacher).toEqual(
+      expect.arrayContaining([
+        'attendance.manage',
+        'homework.manage',
+        'assignment.manage',
+        'timetable.read',
+      ]),
+    );
+    expect(teacher).not.toContain('timetable.manage');
+    expect(teacher).not.toContain('attendance.backdate');
+    for (const role of [
+      'ADMISSION_OFFICER',
+      'ACCOUNTANT',
+      'TRANSPORT_MANAGER',
+      'PARENT',
+      'STUDENT',
+    ])
+      expect(
+        permissionsForRoles([role]).filter((k) => ops.includes(k)),
+        role,
+      ).toEqual([]);
   });
 });

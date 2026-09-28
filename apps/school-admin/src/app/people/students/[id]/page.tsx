@@ -19,12 +19,13 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
     ctx.can('grade.read') &&
     ctx.can('branch.read') &&
     ctx.can('academic_year.read');
-  const [student, years, grades, sections, branches] = await Promise.all([
+  const [student, years, grades, sections, branches, attendance] = await Promise.all([
     load(() => ctx.people.student(id)),
     canStructure ? load(() => ctx.academic.academicYears()) : null,
     canStructure ? load(() => ctx.academic.grades()) : null,
     canStructure ? load(() => ctx.academic.sections()) : null,
     canStructure ? load(() => ctx.academic.branches()) : null,
+    ctx.can('attendance.read') ? load(() => ctx.ops.studentAttendance(id)) : null,
   ]);
   if (!student.ok) {
     if (student.status === 404) notFound();
@@ -81,6 +82,28 @@ export default async function StudentPage({ params }: { params: Promise<{ id: st
           </dd>
         </div>
       </dl>
+      {attendance?.ok && attendance.data ? (
+        <section
+          aria-labelledby="attendance-summary-heading"
+          className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
+          data-testid="student-attendance"
+        >
+          <h2 id="attendance-summary-heading" className="text-base font-semibold">
+            Attendance · {attendance.data.academicYearName}
+          </h2>
+          <p className="mt-1 text-sm text-slate-700">
+            Present {attendance.data.counts.PRESENT} · Late {attendance.data.counts.LATE} · Absent{' '}
+            {attendance.data.counts.ABSENT} · Excused {attendance.data.counts.EXCUSED}
+            {attendance.data.attendanceRate !== null
+              ? ` · Attendance ${String(attendance.data.attendanceRate)}%`
+              : ''}
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Attendance % = (present + late) ÷ (present + late + absent); excused days are not
+            counted.
+          </p>
+        </section>
+      ) : null}
       <StudentDetailView
         student={student.data}
         structure={{

@@ -156,6 +156,22 @@ views according to their permissions. The seed adds a fictional structure to eac
 See [docs/architecture/SCHOOL_ACADEMIC_MODEL.md](docs/architecture/SCHOOL_ACADEMIC_MODEL.md)
 and [docs/api/ACADEMIC_CONFIGURATION.md](docs/api/ACADEMIC_CONFIGURATION.md).
 
+### Attendance, homework, assignments & timetable (Phase 7)
+
+The School Admin workspace now covers day-to-day academic operations:
+
+- **Attendance:** daily class attendance with "Mark all present", a correction log and a 7-day
+  teacher window.
+- **Homework and assignments:** a draft → publish lifecycle.
+- **Timetable:** a weekly timetable with branch bell schedules and database-enforced teacher and
+  class conflict protection.
+
+Teachers work only in the classes and subjects they are assigned. See
+[docs/architecture/ATTENDANCE_MODEL.md](docs/architecture/ATTENDANCE_MODEL.md),
+[docs/architecture/ACADEMIC_WORK_MODEL.md](docs/architecture/ACADEMIC_WORK_MODEL.md),
+[docs/architecture/TIMETABLE_MODEL.md](docs/architecture/TIMETABLE_MODEL.md) and
+[docs/api/ACADEMIC_OPERATIONS.md](docs/api/ACADEMIC_OPERATIONS.md).
+
 ### School Admin workspace (Phase 6)
 
 Signing in at http://school-a.localhost:4002 opens the School Admin workspace:

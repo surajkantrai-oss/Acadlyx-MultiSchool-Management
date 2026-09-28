@@ -41,6 +41,14 @@ export const TENANT_SCOPED_MODELS: Readonly<Record<string, 'id' | 'tenantId'>> =
   TeacherAssignment: 'tenantId',
   BulkImportJob: 'tenantId',
   BulkImportRow: 'tenantId',
+  // Phase 7 — attendance, homework, assignments & timetable.
+  AttendanceSession: 'tenantId',
+  AttendanceRecord: 'tenantId',
+  AttendanceRecordHistory: 'tenantId',
+  Homework: 'tenantId',
+  Assignment: 'tenantId',
+  TimetablePeriod: 'tenantId',
+  TimetableEntry: 'tenantId',
 };
 
 /**

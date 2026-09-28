@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Breadcrumbs } from '@/components/shell/breadcrumbs';
 import { notFound } from 'next/navigation';
 import { personName } from '@/components/people/shared';
@@ -38,6 +39,13 @@ export default async function TeacherPage({ params }: { params: Promise<{ id: st
         ]}
       />
       <PageHeader title={personName(teacher.data)} />
+      {ctx.can('timetable.read') && ctx.can('people.read_all') ? (
+        <p className="text-sm">
+          <Link className="underline" href={`/timetable?teacher=${teacher.data.id}`}>
+            View weekly timetable
+          </Link>
+        </p>
+      ) : null}
       <TeacherDetailView
         teacher={teacher.data}
         structure={{

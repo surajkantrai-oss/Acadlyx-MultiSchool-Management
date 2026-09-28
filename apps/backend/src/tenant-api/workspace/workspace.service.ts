@@ -11,7 +11,7 @@ import type {
   StudentStatus,
   TeacherStatus,
 } from '@acadlyx/types';
-import { SEARCH_LIMIT_PER_TYPE, SEARCH_MIN_LENGTH } from '@acadlyx/validation';
+import { addDays, localToday, SEARCH_LIMIT_PER_TYPE, SEARCH_MIN_LENGTH } from '@acadlyx/validation';
 import { Injectable } from '@nestjs/common';
 import { currentAuth } from '../../auth/core/access.guard.js';
 import type { PermissionKey } from '@acadlyx/permissions';
@@ -28,6 +28,7 @@ import {
   toAccount,
 } from '../people/people-mappers.js';
 import { parentScope, sectionScope, studentScope, withScope } from '../people/people-scope.js';
+import { myAssignments } from '../operations/ops-scope.js';
 import { recentActivity } from './activity.js';
 import { WORKSPACE_ERRORS } from './workspace-errors.js';
 import type {
@@ -53,7 +54,7 @@ function personName(p: { firstName: string; middleName: string | null; lastName:
 }
 
 interface Context {
-  year: { id: string; name: string; isCurrent: boolean } | null;
+  year: { id: string; name: string; isCurrent: boolean; status?: string } | null;
   branch: { id: string; name: string } | null;
 }
 
@@ -83,7 +84,12 @@ export class WorkspaceService {
           ...(ctx.branch ? { section: { branchId: ctx.branch.id } } : {}),
         };
         const out: DashboardSummary = {
-          context: { academicYear: ctx.year, branch: ctx.branch },
+          context: {
+            academicYear: ctx.year
+              ? { id: ctx.year.id, name: ctx.year.name, isCurrent: ctx.year.isCurrent }
+              : null,
+            branch: ctx.branch,
+          },
         };
         const schoolWide = can('people.read_all');
 
@@ -161,6 +167,8 @@ export class WorkspaceService {
             activeTeachersWithoutAssignment: noAssignment,
           };
         }
+        out.operations = await this.operations(tx, school, ctx);
+        if (Object.keys(out.operations).length === 0) delete out.operations;
         if (can('school_activity.read')) out.activity = await recentActivity(tx, school);
         if (can('bulk_import.read')) {
           const pending = await tx.bulkImportJob.count({
@@ -504,6 +512,70 @@ export class WorkspaceService {
 
   // ---- helpers ---------------------------------------------------------------------------------
 
+  /** Phase 7 counts, scoped exactly like the modules (teachers: their own classes/subjects). */
+  private async operations(
+    tx: TenantTransaction,
+    school: School,
+    ctx: Context,
+  ): Promise<NonNullable<DashboardSummary['operations']>> {
+    const out: NonNullable<DashboardSummary['operations']> = {};
+    if (!ctx.year || !(can('attendance.read') || can('homework.read') || can('assignment.read')))
+      return out;
+    const scope = await myAssignments(tx, school);
+    const inScope = scope === null ? {} : { id: { in: [...scope.sections] } };
+    const sections = await tx.section.findMany({
+      where: {
+        schoolId: school.id,
+        academicYearId: ctx.year.id,
+        isActive: true,
+        ...(ctx.branch ? { branchId: ctx.branch.id } : {}),
+        ...inScope,
+        enrollments: { some: { status: 'ACTIVE' } },
+      },
+      select: { id: true, branch: { select: { timezone: true } } },
+    });
+    const today = (tz: string) => localToday(tz);
+    const tz = sections[0]?.branch.timezone ?? school.timezone;
+    if (can('attendance.read') && ctx.year.status === 'ACTIVE') {
+      const todays = [...new Set(sections.map((x) => today(x.branch.timezone)))];
+      const done = await tx.attendanceSession.findMany({
+        where: {
+          schoolId: school.id,
+          sectionId: { in: sections.map((x) => x.id) },
+          date: { in: todays.map((d) => new Date(`${d}T00:00:00.000Z`)) },
+        },
+        select: { sectionId: true, date: true },
+      });
+      const marked = new Set(
+        done.map((d) => `${d.sectionId}:${d.date.toISOString().slice(0, 10)}`),
+      );
+      out.attendanceToMark = sections.filter(
+        (x) => !marked.has(`${x.id}:${today(x.branch.timezone)}`),
+      ).length;
+    }
+    const from = today(tz);
+    const window = {
+      schoolId: school.id,
+      status: 'PUBLISHED' as const,
+      section: {
+        academicYearId: ctx.year.id,
+        ...(ctx.branch ? { branchId: ctx.branch.id } : {}),
+        ...(scope === null ? {} : { id: { in: [...scope.sections] } }),
+      },
+      dueDate: {
+        gte: new Date(`${from}T00:00:00.000Z`),
+        lte: new Date(`${addDays(from, 7)}T00:00:00.000Z`),
+      },
+    };
+    const [hw, asg] = await Promise.all([
+      can('homework.read') ? tx.homework.count({ where: window }) : Promise.resolve(undefined),
+      can('assignment.read') ? tx.assignment.count({ where: window }) : Promise.resolve(undefined),
+    ]);
+    if (hw !== undefined) out.homeworkDueSoon = hw;
+    if (asg !== undefined) out.assignmentsDueSoon = asg;
+    return out;
+  }
+
   /** Validates UI-supplied context ids against THIS school; defaults year to the current one. */
   private async context(
     tx: TenantTransaction,
@@ -519,7 +591,9 @@ export class WorkspaceService {
     if ((q.academicYearId && !year) || (q.branchId && !branch))
       throw WORKSPACE_ERRORS.contextNotFound();
     return {
-      year: year ? { id: year.id, name: year.name, isCurrent: year.isCurrent } : null,
+      year: year
+        ? { id: year.id, name: year.name, isCurrent: year.isCurrent, status: year.status }
+        : null,
       branch: branch ? { id: branch.id, name: branch.name } : null,
     };
   }

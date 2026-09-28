@@ -196,3 +196,28 @@ describe('workspace client (Phase 6)', () => {
     ]);
   });
 });
+
+describe('operations client (Phase 7)', () => {
+  it('builds attendance, class work and timetable paths', async () => {
+    const calls: string[] = [];
+    const fake = ((url: string, init: RequestInit) => {
+      calls.push(
+        `${init.method ?? 'GET'} ${url}${typeof init.body === 'string' ? ` ${init.body}` : ''}`,
+      );
+      return Promise.resolve(new Response('{}', { status: 200 }));
+    }) as typeof fetch;
+    const api = createApiClient({ baseUrl: 'http://api.test/api/v1', fetch: fake });
+    await api.ops.attendanceSheet('s/1', '2026-09-28');
+    await api.ops.saveAttendance({ sectionId: 's1', date: '2026-09-28', records: [] });
+    await api.ops.classwork('assignments', { status: 'PUBLISHED', page: 2 });
+    await api.ops.transitionClasswork('homework', 'h1', 'publish', 3);
+    await api.ops.teacherWeek('me');
+    expect(calls).toEqual([
+      'GET http://api.test/api/v1/attendance/sections/s%2F1?date=2026-09-28',
+      'PUT http://api.test/api/v1/attendance {"sectionId":"s1","date":"2026-09-28","records":[]}',
+      'GET http://api.test/api/v1/assignments?status=PUBLISHED&page=2',
+      'POST http://api.test/api/v1/homework/h1/publish {"expectedVersion":3}',
+      'GET http://api.test/api/v1/timetable/teachers/me',
+    ]);
+  });
+});

@@ -52,6 +52,37 @@ export default async function ClassPage({ params }: { params: Promise<{ sectionI
         {c.branchName} · {c.academicYearName}
         {c.isActive ? '' : ' · inactive'}
       </PageHeader>
+      <nav
+        aria-label="Class operations"
+        className="flex flex-wrap gap-2 text-sm"
+        data-testid="class-ops"
+      >
+        {[
+          ctx.can('attendance.read') && { href: `/attendance/${c.sectionId}`, label: 'Attendance' },
+          ctx.can('timetable.read') && {
+            href: `/timetable?section=${c.sectionId}`,
+            label: 'Timetable',
+          },
+          ctx.can('homework.read') && {
+            href: `/homework?sectionId=${c.sectionId}`,
+            label: 'Homework',
+          },
+          ctx.can('assignment.read') && {
+            href: `/assignments?sectionId=${c.sectionId}`,
+            label: 'Assignments',
+          },
+        ]
+          .filter((l): l is { href: string; label: string } => Boolean(l))
+          .map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              className="rounded-full bg-white px-3 py-1 ring-1 ring-slate-200 hover:bg-slate-50"
+            >
+              {l.label}
+            </Link>
+          ))}
+      </nav>
       <Card title="Class">
         <Dl
           items={[

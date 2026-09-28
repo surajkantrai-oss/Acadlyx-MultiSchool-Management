@@ -58,7 +58,7 @@ const optionalPersonId = ({ value }: { value: unknown }) => {
 };
 const present = (_: object, value: unknown) => value !== null && value !== undefined;
 
-function IsIsoDateOnly() {
+export function IsIsoDateOnly() {
   return (object: object, propertyName: string) => {
     registerDecorator({
       name: 'isIsoDateOnly',

@@ -31,6 +31,15 @@ export async function purgeTenants(prisma: PlatformPrismaService, prefix: string
   ).map((t) => t.id);
   const byTenant = { tenantId: { in: tenantIds } };
   await prisma.$transaction([
+    // Phase 7 (reference sections/students/teachers — delete them first). The platform role
+    // bypasses the draft-only delete policy, which applies to the application role only.
+    prisma.attendanceRecordHistory.deleteMany({ where: byTenant }),
+    prisma.attendanceRecord.deleteMany({ where: byTenant }),
+    prisma.attendanceSession.deleteMany({ where: byTenant }),
+    prisma.homework.deleteMany({ where: byTenant }),
+    prisma.assignment.deleteMany({ where: byTenant }),
+    prisma.timetableEntry.deleteMany({ where: byTenant }),
+    prisma.timetablePeriod.deleteMany({ where: byTenant }),
     // Phase 5 (profiles reference users/sections — delete them first).
     prisma.bulkImportRow.deleteMany({ where: byTenant }),
     prisma.bulkImportJob.deleteMany({ where: byTenant }),

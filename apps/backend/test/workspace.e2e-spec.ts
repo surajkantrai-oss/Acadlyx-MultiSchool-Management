@@ -275,7 +275,8 @@ describe('School Admin workspace API (e2e)', () => {
     it('omits blocks the caller may not read (no zeroed fake metrics)', async () => {
       const teacher = (await as('teacher').get('/api/v1/workspace/dashboard').expect(200))
         .body as DashboardSummary;
-      expect(Object.keys(teacher).sort()).toEqual(['classes', 'context', 'teachers']);
+      // Phase 7 adds the teacher's scoped day-to-day counts (no school-wide people data).
+      expect(Object.keys(teacher).sort()).toEqual(['classes', 'context', 'operations', 'teachers']);
       const accountant = (await as('accountant').get('/api/v1/workspace/dashboard').expect(200))
         .body as DashboardSummary;
       expect(accountant.students?.byStatus.ACTIVE).toBe(3);

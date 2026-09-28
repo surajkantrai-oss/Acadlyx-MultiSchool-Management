@@ -115,6 +115,9 @@ never zeroed**.
 | IMPORT_COMPLETED / IMPORT_FAILED                                 | Student/Guardian/Teacher import completed / Bulk import failed             |
 | PROFILE_ACCOUNT_CREATED / PROFILE_ACCOUNT_LINKED                 | Login account created / linked                                             |
 | ACTIVATION_CODE_ISSUED                                           | Account activation started                                                 |
+| ATTENDANCE_RECORDED / ATTENDANCE_CORRECTED (Phase 7)             | Attendance recorded / corrected — class name only, never a student         |
+| HOMEWORK_PUBLISHED / ASSIGNMENT_PUBLISHED (Phase 7)              | Homework / Assignment published — class name                               |
+| TIMETABLE_ENTRY_CREATED / TIMETABLE_ENTRY_REMOVED (Phase 7)      | Timetable updated — class name                                             |
 
 Security, authentication, platform and configuration events are never selected. Profile edits
 (`*_UPDATED` with changed fields) are excluded too, to avoid hinting at before/after data.

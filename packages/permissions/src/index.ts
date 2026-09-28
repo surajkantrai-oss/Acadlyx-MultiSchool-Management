@@ -134,6 +134,37 @@ export const PERMISSION_REGISTRY = [
     description:
       'Read every student, guardian, enrollment and class roster in the school (without it, reads are limited to sections the user actively teaches)',
   },
+  // Phase 7 — attendance, homework, assignments & timetable (teachers: assigned sections/subjects only).
+  { key: 'attendance.read', scope: 'TENANT', description: 'View class attendance' },
+  {
+    key: 'attendance.manage',
+    scope: 'TENANT',
+    description:
+      'Record and correct class attendance (today and the previous 7 school-local calendar days)',
+  },
+  {
+    key: 'attendance.backdate',
+    scope: 'TENANT',
+    description: 'Record/correct attendance for any past date of a non-closed academic year',
+  },
+  { key: 'homework.read', scope: 'TENANT', description: 'View homework' },
+  {
+    key: 'homework.manage',
+    scope: 'TENANT',
+    description: 'Create, edit, publish and archive homework',
+  },
+  { key: 'assignment.read', scope: 'TENANT', description: 'View assignments' },
+  {
+    key: 'assignment.manage',
+    scope: 'TENANT',
+    description: 'Create, edit, publish, close and archive assignments',
+  },
+  { key: 'timetable.read', scope: 'TENANT', description: 'View timetables and bell schedules' },
+  {
+    key: 'timetable.manage',
+    scope: 'TENANT',
+    description: 'Configure periods and the weekly class timetable',
+  },
 ] as const satisfies readonly { key: string; scope: AuthScope; description: string }[];
 
 export type PermissionKey = (typeof PERMISSION_REGISTRY)[number]['key'];
@@ -201,6 +232,19 @@ const PEOPLE_MANAGE: readonly PermissionKey[] = [
   'people.read_all',
 ];
 
+/** Phase 7: full academic operations (leadership). */
+const ACADEMIC_OPERATIONS_MANAGE: readonly PermissionKey[] = [
+  'attendance.read',
+  'attendance.manage',
+  'attendance.backdate',
+  'homework.read',
+  'homework.manage',
+  'assignment.read',
+  'assignment.manage',
+  'timetable.read',
+  'timetable.manage',
+];
+
 /** Phase 4: read-only academic structure needed by staff in later modules. */
 const ACADEMIC_STRUCTURE_READ: readonly PermissionKey[] = [
   'school.read',
@@ -236,6 +280,7 @@ export const ROLE_REGISTRY = [
       ...ACADEMIC_MANAGE,
       ...PEOPLE_MANAGE,
       'school_activity.read',
+      ...ACADEMIC_OPERATIONS_MANAGE,
     ],
     mfaRequired: true,
     pinAllowed: false,
@@ -252,6 +297,7 @@ export const ROLE_REGISTRY = [
       ...ACADEMIC_MANAGE,
       ...PEOPLE_MANAGE,
       'school_activity.read',
+      ...ACADEMIC_OPERATIONS_MANAGE,
     ],
     mfaRequired: true,
     pinAllowed: false,
@@ -287,6 +333,14 @@ export const ROLE_REGISTRY = [
       'teacher.read',
       'enrollment.read',
       'teacher_assignment.read',
+      // Phase 7: daily class operations — resource-scoped to assigned sections/subjects.
+      'attendance.read',
+      'attendance.manage',
+      'homework.read',
+      'homework.manage',
+      'assignment.read',
+      'assignment.manage',
+      'timetable.read',
     ],
     mfaRequired: false,
     pinAllowed: false,

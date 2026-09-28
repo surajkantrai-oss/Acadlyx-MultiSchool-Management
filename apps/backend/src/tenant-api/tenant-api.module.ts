@@ -9,6 +9,10 @@ import { ACADEMIC_PROVIDERS } from './academic/academic.providers.js';
 import { IMPORT_QUEUE } from './imports/imports.service.js';
 import { PEOPLE_CONTROLLERS } from './people/people.controllers.js';
 import { PEOPLE_PROVIDERS } from './people/people.providers.js';
+import {
+  OPERATIONS_CONTROLLERS,
+  OPERATIONS_PROVIDERS,
+} from './operations/operations.controllers.js';
 import { WORKSPACE_CONTROLLERS } from './workspace/workspace.controllers.js';
 import { WorkspaceService } from './workspace/workspace.service.js';
 import { TenantAuthController } from './tenant-auth.controller.js';
@@ -23,6 +27,7 @@ const TENANT_CONTROLLERS = [
   ...ACADEMIC_CONTROLLERS,
   ...PEOPLE_CONTROLLERS,
   ...WORKSPACE_CONTROLLERS,
+  ...OPERATIONS_CONTROLLERS,
 ];
 
 /**
@@ -33,7 +38,13 @@ const TENANT_CONTROLLERS = [
 @Module({
   imports: [TenancyModule, BullModule.registerQueue({ name: IMPORT_QUEUE })],
   controllers: TENANT_CONTROLLERS,
-  providers: [TenantAuthService, ...ACADEMIC_PROVIDERS, ...PEOPLE_PROVIDERS, WorkspaceService],
+  providers: [
+    TenantAuthService,
+    ...ACADEMIC_PROVIDERS,
+    ...PEOPLE_PROVIDERS,
+    WorkspaceService,
+    ...OPERATIONS_PROVIDERS,
+  ],
 })
 export class TenantApiModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

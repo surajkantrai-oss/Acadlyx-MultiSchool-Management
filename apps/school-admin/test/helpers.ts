@@ -87,6 +87,13 @@ export async function purge(client: pg.Client, prefix: string): Promise<void> {
   ).rows.map((r) => r.id);
   if (ids.length === 0) return;
   for (const table of [
+    'attendance_record_history',
+    'attendance_records',
+    'attendance_sessions',
+    'homework',
+    'assignments',
+    'timetable_entries',
+    'timetable_periods',
     'bulk_import_rows',
     'bulk_import_jobs',
     'teacher_assignments',

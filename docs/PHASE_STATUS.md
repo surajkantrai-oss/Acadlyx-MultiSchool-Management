@@ -7,12 +7,31 @@
 | 3     | Authentication, RBAC & Security                            | **COMPLETE** (2026-09-27, commit `1366890`) |
 | 4     | School & Academic Configuration                            | **COMPLETE** (2026-09-27, commit `acd41c5`) |
 | 5     | Students, Parents, Teachers & Bulk Onboarding              | **COMPLETE** (2026-09-27, commit `64bc4e1`) |
-| 6     | School Admin Portal Core                                   | **COMPLETE — awaiting review** (2026-09-28) |
-| 7–15  | Later phases per project plan (15 = production deployment) | NOT STARTED                                 |
+| 6     | School Admin Portal Core                                   | **COMPLETE** (2026-09-28, commit `d079903`) |
+| 7     | Attendance, Homework, Assignments & Timetable              | **COMPLETE — awaiting review** (2026-09-28) |
+| 8–15  | Later phases per project plan (15 = production deployment) | NOT STARTED                                 |
+
+## Phase 7 verification (2026-09-28)
+
+Uncommitted, awaiting review. HEAD is `d079903` (Phase 6). Migration
+`phase_7_attendance_homework_assignments_timetable`.
+
+| Check                                                                                                                                                                      | Result |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| Migration applied; Phase 2–5 migrations unchanged; status OK                                                                                                               | PASS   |
+| Fresh-database replay (roles → 5 migrations → generate → RBAC sync → seed ×2 → full tests)                                                                                 | PASS   |
+| Backend e2e: attendance, homework, assignments, timetable, concurrency, teacher/subject scope, A→B/B→C/C→A, same-tenant school isolation, audit/feed                       | PASS   |
+| Final checks: teacher window (today/−1/−7 allowed, −8/future/closed denied), branch-timezone boundary, attendance % formula (unit + API), date-only deadlines (both kinds) | PASS   |
+| Direct RLS tests on the 7 Phase 7 tables                                                                                                                                   | PASS   |
+| School Admin e2e (attendance, homework, assignments, timetable, isolation)                                                                                                 | PASS   |
+| Negative controls (scoping off → RLS holds; permission weakened → fails; teacher scope removed → fails; service timetable checks bypassed → DB still blocks)               | PASS   |
+| format / lint / typecheck / tests / build / mobile validate                                                                                                                | PASS   |
+| Browser walkthrough (Principal/School Admin, Teacher, School B)                                                                                                            | PASS   |
+| iOS regression                                                                                                                                                             | PASS   |
 
 ## Phase 6 verification (2026-09-27)
 
-Uncommitted, awaiting review. HEAD is `64bc4e1` (Phase 5). No new migration.
+Committed as `d079903` (pushed). No new migration.
 
 | Check                                                                                                                                | Result |
 | ------------------------------------------------------------------------------------------------------------------------------------ | ------ |

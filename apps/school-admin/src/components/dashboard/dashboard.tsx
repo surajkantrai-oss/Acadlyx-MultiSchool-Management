@@ -147,6 +147,33 @@ export function Dashboard({ d, contextParams }: { d: DashboardSummary; contextPa
             </dl>
           </Section>
         ) : null}
+        {d.operations ? (
+          <Section title="Today" testId="dashboard-operations">
+            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {d.operations.attendanceToMark !== undefined ? (
+                <Tile
+                  label="Classes to mark attendance"
+                  value={d.operations.attendanceToMark}
+                  href="/attendance"
+                />
+              ) : null}
+              {d.operations.homeworkDueSoon !== undefined ? (
+                <Tile
+                  label="Homework due in 7 days"
+                  value={d.operations.homeworkDueSoon}
+                  href="/homework?status=PUBLISHED"
+                />
+              ) : null}
+              {d.operations.assignmentsDueSoon !== undefined ? (
+                <Tile
+                  label="Assignments due in 7 days"
+                  value={d.operations.assignmentsDueSoon}
+                  href="/assignments?status=PUBLISHED"
+                />
+              ) : null}
+            </dl>
+          </Section>
+        ) : null}
         {d.accounts ? (
           <Section title="Login access" testId="dashboard-accounts">
             <div className="overflow-x-auto">

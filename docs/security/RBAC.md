@@ -1,4 +1,4 @@
-# RBAC (Phases 3–6)
+# RBAC (Phases 3–7)
 
 Source of truth: `packages/permissions/src/index.ts`. At startup the backend syncs the registry
 into `roles`, `permissions` and `role_permissions`. The sync runs under a PostgreSQL advisory
@@ -31,6 +31,11 @@ Permissions are resolved server-side on every request and are never placed in th
 | `people_account.manage`                   | TENANT   | Create / link login accounts for profiles     |
 | `people.read_all`                         | TENANT   | School-wide people reads (Phase 6 data scope) |
 | `school_activity.read`                    | TENANT   | Dashboard recent-activity feed (Phase 6)      |
+| `attendance.read` / `.manage`             | TENANT   | View / record & correct attendance (Phase 7)  |
+| `attendance.backdate`                     | TENANT   | Record/correct any past date of the open year |
+| `homework.read` / `.manage`               | TENANT   | View / create, edit, publish, archive         |
+| `assignment.read` / `.manage`             | TENANT   | View / create, edit, publish, close, archive  |
+| `timetable.read` / `.manage`              | TENANT   | View / configure periods and lessons          |
 
 ## Roles (system roles; no custom roles yet)
 
@@ -134,3 +139,20 @@ more:
 
 Granted only to Principal and School Admin. It gates the humanised AuditLog feed on the dashboard
 (the API omits the block otherwise).
+
+## Phase 7 grants — rationale
+
+| Role                                                              | Phase 7 permissions                                                                                                                                                                               |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PRINCIPAL, SCHOOL_ADMIN                                           | all nine, school-wide                                                                                                                                                                             |
+| TEACHER                                                           | attendance.read/manage, homework.read/manage, assignment.read/manage, timetable.read — **resource-scoped** to their open TeacherAssignments (subject work needs the exact Section + Subject pair) |
+| ADMISSION_OFFICER, ACCOUNTANT, TRANSPORT_MANAGER, PARENT, STUDENT | none                                                                                                                                                                                              |
+
+- **Permission vs scope.** A permission says _what_; the scope says _where_. The Phase 6
+  `people.read_all` data scope decides whether a caller acts school-wide; otherwise only their own
+  ACTIVE teacher profile's open assignments count. Both must pass, and out-of-scope ids are 404.
+- **Teachers and the timetable.** Teachers can view but never configure the timetable
+  (`timetable.manage` is leadership-only).
+- **Why `attendance.backdate` is separate.** Teachers are limited to today and the previous 7
+  school-local calendar days (approved decision C); only holders of this permission may correct older dates.
+  Future dates are never allowed, and CLOSED years are read-only for everyone.

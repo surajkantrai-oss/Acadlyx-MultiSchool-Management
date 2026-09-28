@@ -23,6 +23,24 @@ Items noticed during Phase 1 that were intentionally **not** implemented.
 - Drag-and-drop ordering (up/down controls are provided); bulk import of classes/sections.
 - Hard deletion of mistaken setup rows that are still unused.
 
+## Noted during Phase 7 (deliberately not implemented)
+
+- **Assignment submissions:** a student submission table (text + optional https link),
+  server-derived lateness, and student/parent/teacher mobile screens. This is Phase 8.
+- **Grading, feedback, marks and results:** Phase 9.
+- **Attachments on homework/assignments:** the documents/storage phase.
+- **Publish notifications:** the notifications phase.
+- **Timetable:**
+  - effective-dated revisions (history of past timetables)
+  - A/B weeks
+  - holiday/calendar exceptions (School Calendar)
+  - rooms and substitute teachers
+  - exam timetables
+- **Attendance:** period-level attendance, half days, attendance analytics (Phase 14), and
+  automatic parent absence alerts.
+- **Prisma 7 limitation:** `@db.Time` values inside composite relation keys cannot be
+  re-serialised. Timetable entry writes use parameterised SQL; revisit on a future Prisma upgrade.
+
 ## Noted during Phase 6 (deliberately not implemented)
 
 - A full, filterable school activity log page (Phase 6 shows only the 10 most recent events).

@@ -21,6 +21,10 @@ const ALLOWED: RegExp[] = [
   // Phase 6 workspace read models (GET only on the API side).
   /^workspace\/(dashboard|search|access)$/,
   /^classes(\/[\w-]+)?$/,
+  // Phase 7 — academic operations (permissions + teacher scope enforced by the API).
+  /^attendance(\/(classes|students\/[\w-]+|sections\/[\w-]+(\/(history|changes))?))?$/,
+  /^(homework|assignments)(\/(targets|[\w-]+(\/(publish|close|archive))?))?$/,
+  /^timetable\/(periods(\/(order|[\w-]+))?|entries(\/[\w-]+)?|sections\/[\w-]+|teachers\/[\w-]+)$/,
   /^imports(\/(templates\/(STUDENTS|PARENTS|TEACHERS)(\/file)?|[\w-]+(\/(rows|errors\.csv|confirm|cancel))?))?$/,
 ];
 

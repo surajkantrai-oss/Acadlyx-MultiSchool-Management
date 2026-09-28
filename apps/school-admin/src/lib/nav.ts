@@ -32,6 +32,11 @@ export function buildNav(can: (p: PermissionKey) => boolean): NavGroup[] {
       label: 'Academics',
       links: [
         can('enrollment.read') && { href: '/classes', label: 'Classes' },
+        // Phase 7 — day-to-day operations.
+        can('attendance.read') && { href: '/attendance', label: 'Attendance' },
+        can('homework.read') && { href: '/homework', label: 'Homework' },
+        can('assignment.read') && { href: '/assignments', label: 'Assignments' },
+        can('timetable.read') && { href: '/timetable', label: 'Timetable' },
         can('grade.read') && { href: '/settings/grades', label: 'Grades & sections' },
         can('subject.read') && { href: '/settings/subjects', label: 'Subjects' },
       ].filter((l): l is NavLink => Boolean(l)),

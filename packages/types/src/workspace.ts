@@ -50,6 +50,17 @@ export interface DashboardSummary {
     activeTeachersWithoutAssignment: number;
   };
   imports?: { recent: ImportJob[]; pending: number };
+  /**
+   * Phase 7 day-to-day work, scoped like the underlying modules (teachers: their classes).
+   * Each count is present only with its read permission.
+   */
+  operations?: {
+    /** Active classes (with students) of the context year with no attendance saved for their local today. */
+    attendanceToMark?: number;
+    /** Published, due today … +7 days (school-local). */
+    homeworkDueSoon?: number;
+    assignmentsDueSoon?: number;
+  };
   /** Present only with `school_activity.read`: humanised recent events (newest first, ≤ 10). */
   activity?: ActivityItem[];
 }

@@ -54,6 +54,13 @@ const MESSAGES: Record<string, (m: Record<string, unknown>) => string> = {
   PROFILE_ACCOUNT_CREATED: () => 'Login account created',
   PROFILE_ACCOUNT_LINKED: () => 'Login account linked',
   ACTIVATION_CODE_ISSUED: () => 'Account activation started',
+  // Phase 7 — class-level wording only: never an individual student's attendance.
+  ATTENDANCE_RECORDED: () => 'Attendance recorded',
+  ATTENDANCE_CORRECTED: () => 'Attendance corrected',
+  HOMEWORK_PUBLISHED: () => 'Homework published',
+  ASSIGNMENT_PUBLISHED: () => 'Assignment published',
+  TIMETABLE_ENTRY_CREATED: () => 'Timetable updated',
+  TIMETABLE_ENTRY_REMOVED: () => 'Timetable updated',
 };
 const ACTIONS = Object.keys(MESSAGES);
 
@@ -97,6 +104,30 @@ export async function recentActivity(
     ...ids(rows, (r) => r.metadata?.studentId),
   ];
   const personSelect = { id: true, firstName: true, middleName: true, lastName: true } as const;
+  const sectionIds = [
+    ...ids(of('timetable_entry'), (r) => r.metadata?.sectionId),
+    ...ids(of('attendance_session'), (r) => r.metadata?.sectionId),
+    ...ids(of('homework'), (r) => r.metadata?.sectionId),
+    ...ids(of('assignment'), (r) => r.metadata?.sectionId),
+  ];
+  const [sessions, homework, classAssignments, sections] = await Promise.all([
+    tx.attendanceSession.findMany({
+      where: { ...s, id: { in: ids(of('attendance_session'), (r) => r.resource_id) } },
+      select: { id: true, sectionId: true, date: true },
+    }),
+    tx.homework.findMany({
+      where: { ...s, id: { in: ids(of('homework'), (r) => r.resource_id) } },
+      select: { id: true, sectionId: true },
+    }),
+    tx.assignment.findMany({
+      where: { ...s, id: { in: ids(of('assignment'), (r) => r.resource_id) } },
+      select: { id: true, sectionId: true },
+    }),
+    tx.section.findMany({
+      where: { ...s, id: { in: sectionIds } },
+      select: { id: true, name: true, grade: { select: { name: true } } },
+    }),
+  ]);
   const [students, parents, teachers, enrollments, assignments, jobs, profiles, actors] =
     await Promise.all([
       tx.student.findMany({ where: { ...s, id: { in: studentIds } }, select: personSelect }),
@@ -165,6 +196,14 @@ export async function recentActivity(
   const jb = byId(jobs);
   const pr = new Map(profiles.map((p) => [p.userId, p]));
   const ac = new Map(actors.map((u) => [u.id, u.displayName]));
+  const se = new Map(sections.map((x) => [x.id, `${x.grade.name} ${x.name}`]));
+  const ss = new Map(sessions.map((x) => [x.id, x]));
+  const hw = new Map(homework.map((x) => [x.id, x]));
+  const ca = new Map(classAssignments.map((x) => [x.id, x]));
+  const cls = (sectionId: string | undefined, href: string | null): Resolved => {
+    const label = sectionId ? se.get(sectionId) : undefined;
+    return label ? { name: label, href } : null;
+  };
   const student = (id: unknown): Resolved => {
     const p = typeof id === 'string' ? st.get(id) : undefined;
     return p ? { name: name(p), href: `/people/students/${p.id}` } : null;
@@ -195,6 +234,24 @@ export async function recentActivity(
       }
       case 'bulk_import':
         return jb.has(id) ? { name: null, href: `/people/imports/${id}` } : null;
+      case 'attendance_session': {
+        const x = ss.get(id);
+        return x
+          ? cls(x.sectionId, `/attendance/${x.sectionId}?date=${x.date.toISOString().slice(0, 10)}`)
+          : null;
+      }
+      case 'homework': {
+        const x = hw.get(id);
+        return x ? cls(x.sectionId, `/homework/${x.id}`) : null;
+      }
+      case 'assignment': {
+        const x = ca.get(id);
+        return x ? cls(x.sectionId, `/assignments/${x.id}`) : null;
+      }
+      case 'timetable_entry': {
+        const sid = typeof r.metadata?.sectionId === 'string' ? r.metadata.sectionId : undefined;
+        return cls(sid, sid ? `/timetable?section=${sid}` : null);
+      }
       case 'user': {
         const p = pr.get(id);
         return p ? { name: p.label, href: p.href } : null;

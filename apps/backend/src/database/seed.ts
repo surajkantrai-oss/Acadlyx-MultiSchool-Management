@@ -3,7 +3,8 @@
  * development identities for Phase 3 (school A/B principal, teacher, parent, student and a
  * multi-role teacher+parent), plus a fictional Phase 4 academic structure per school (branches,
  * academic years, grades, sections, subjects and grade–subject mappings), plus fictional Phase 5
- * students, parents, teachers, enrollments, guardians and teacher assignments.
+ * students, parents, teachers, enrollments, guardians and teacher assignments, plus fictional
+ * Phase 7 periods, a weekly timetable, attendance days and homework/assignments.
  *
  *   DEV_SEED_PASSWORD='<12+ chars>' DEV_SEED_PIN='<6 digits>' pnpm db:seed
  *
@@ -897,6 +898,348 @@ async function seedPeople(prisma: PrismaClient): Promise<void> {
   }
 }
 
+/**
+ * Phase 7 fictional academic operations: a bell schedule per demo school, a weekly timetable for
+ * SCHOOL_A Grade 5 A built from the seeded teacher assignments, attendance for the three previous
+ * working days (today is left for the teacher walkthrough), and a little homework / assignments.
+ * Idempotent: periods by name, lessons by slot, attendance by class + date, work by title.
+ * Dates are relative to the seed day (school-local).
+ */
+const DEMO_PERIODS: [string, 'INSTRUCTIONAL' | 'BREAK' | 'LUNCH' | 'ASSEMBLY', string, string][] = [
+  ['Assembly', 'ASSEMBLY', '08:15', '08:30'],
+  ['Period 1', 'INSTRUCTIONAL', '08:30', '09:15'],
+  ['Period 2', 'INSTRUCTIONAL', '09:15', '10:00'],
+  ['Break', 'BREAK', '10:00', '10:15'],
+  ['Period 3', 'INSTRUCTIONAL', '10:15', '11:00'],
+  ['Period 4', 'INSTRUCTIONAL', '11:00', '11:45'],
+  ['Lunch', 'LUNCH', '11:45', '12:15'],
+  ['Period 5', 'INSTRUCTIONAL', '12:15', '13:00'],
+];
+/** SCHOOL_A Grade 5 A weekly lessons: [employeeId, subject, weekday, period]. */
+const DEMO_LESSONS: [string, string, Weekday, string][] = [
+  ['TCH001', 'MATH', 'MONDAY', 'Period 1'],
+  ['TCH001', 'MATH', 'WEDNESDAY', 'Period 2'],
+  ['TCH001', 'MATH', 'FRIDAY', 'Period 3'],
+  ['TCH002', 'ENG', 'MONDAY', 'Period 2'],
+  ['TCH002', 'ENG', 'TUESDAY', 'Period 1'],
+  ['TCH002', 'ENG', 'THURSDAY', 'Period 3'],
+  ['TCH003', 'EVS', 'TUESDAY', 'Period 2'],
+  ['TCH003', 'EVS', 'THURSDAY', 'Period 1'],
+];
+
+async function seedOperations(prisma: PrismaClient): Promise<void> {
+  const localDate = (tz: string, offsetDays = 0) => {
+    const d = new Date(Date.now() + offsetDays * 86_400_000);
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d);
+  };
+  const DAYS: Weekday[] = [
+    'SUNDAY',
+    'MONDAY',
+    'TUESDAY',
+    'WEDNESDAY',
+    'THURSDAY',
+    'FRIDAY',
+    'SATURDAY',
+  ];
+  const weekdayOf = (iso: string) => DAYS[new Date(`${iso}T00:00:00Z`).getUTCDay()] ?? 'MONDAY';
+
+  for (const key of ['SCHOOL_A', 'SCHOOL_B']) {
+    const tenant = await prisma.tenant.findUnique({ where: { key } });
+    if (!tenant) continue;
+    const tenantId = tenant.id;
+    const school = await prisma.school.findFirst({
+      where: { tenantId },
+      orderBy: { createdAt: 'asc' },
+    });
+    const year = school
+      ? await prisma.academicYear.findFirst({ where: { schoolId: school.id, isCurrent: true } })
+      : null;
+    // SCHOOL_A's demo classes live on the MAIN campus (the primary branch may be changed by admins).
+    const branch = school
+      ? ((await prisma.branch.findFirst({ where: { schoolId: school.id, code: 'MAIN' } })) ??
+        (await prisma.branch.findFirst({ where: { schoolId: school.id, isPrimary: true } })))
+      : null;
+    if (!school || !year || !branch) continue;
+    const scope = { tenantId, schoolId: school.id };
+    const actor = await prisma.user.findFirst({
+      where: {
+        tenantId,
+        roles: { some: { role: { key: { in: ['SCHOOL_ADMIN', 'PRINCIPAL'] } } } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!actor) continue;
+
+    // Bell schedule (primary branch, current year).
+    const periods: Record<string, { id: string; start: string; end: string }> = {};
+    for (const [i, [name, type, start, end]] of DEMO_PERIODS.entries()) {
+      const existing = await prisma.timetablePeriod.findUnique({
+        where: {
+          branchId_academicYearId_name: { branchId: branch.id, academicYearId: year.id, name },
+        },
+      });
+      const row =
+        existing ??
+        (await prisma.timetablePeriod.create({
+          data: {
+            ...scope,
+            branchId: branch.id,
+            academicYearId: year.id,
+            name,
+            type,
+            startTime: new Date(`1970-01-01T${start}:00Z`),
+            endTime: new Date(`1970-01-01T${end}:00Z`),
+            displayOrder: i,
+          },
+        }));
+      periods[name] = { id: row.id, start, end };
+    }
+
+    let lessons = 0;
+    let days = 0;
+    let work = 0;
+    const g5a =
+      key === 'SCHOOL_A'
+        ? await prisma.section.findFirst({
+            where: {
+              schoolId: school.id,
+              academicYearId: year.id,
+              branchId: branch.id,
+              code: 'A',
+              grade: { code: 'G5' },
+            },
+          })
+        : null;
+    if (g5a) {
+      for (const [employeeId, subjectCode, weekday, periodName] of DEMO_LESSONS) {
+        const teacher = await prisma.teacher.findUnique({
+          where: { schoolId_employeeId: { schoolId: school.id, employeeId } },
+        });
+        const subject = await prisma.subject.findUnique({
+          where: { schoolId_code: { schoolId: school.id, code: subjectCode } },
+        });
+        const period = periods[periodName];
+        if (!teacher || !subject || !period || !school.workingDays.includes(weekday)) continue;
+        const holds = await prisma.teacherAssignment.findFirst({
+          where: {
+            teacherId: teacher.id,
+            sectionId: g5a.id,
+            subjectId: subject.id,
+            endedAt: null,
+            type: 'SUBJECT_TEACHER',
+          },
+        });
+        if (!holds) continue;
+        const exists = await prisma.timetableEntry.findFirst({
+          where: { sectionId: g5a.id, weekday, periodId: period.id },
+        });
+        if (exists) continue;
+        // Raw SQL: Prisma cannot serialise the @db.Time parts of the entry→period composite key.
+        await prisma.$executeRaw`
+          INSERT INTO "timetable_entries" ("id", "tenant_id", "school_id", "branch_id", "academic_year_id", "section_id",
+            "period_id", "period_type", "start_time", "end_time", "weekday", "subject_id", "teacher_id", "updated_at")
+          VALUES (gen_random_uuid(), ${tenantId}::uuid, ${school.id}::uuid, ${branch.id}::uuid, ${year.id}::uuid,
+            ${g5a.id}::uuid, ${period.id}::uuid, 'INSTRUCTIONAL', ${period.start}::time, ${period.end}::time,
+            ${weekday}::"weekday", ${subject.id}::uuid, ${teacher.id}::uuid, now())`;
+        lessons += 1;
+      }
+
+      // Attendance for the three previous working days (fictional pattern, no health data).
+      const pattern: ('PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED')[] = [
+        'PRESENT',
+        'PRESENT',
+        'LATE',
+        'PRESENT',
+        'ABSENT',
+      ];
+      let offset = -1;
+      let recorded = 0;
+      while (recorded < 3 && offset > -14) {
+        const date = localDate(branch.timezone, offset);
+        offset -= 1;
+        if (!school.workingDays.includes(weekdayOf(date))) continue;
+        if (date < year.startDate.toISOString().slice(0, 10)) break;
+        recorded += 1;
+        const d = new Date(`${date}T00:00:00Z`);
+        if (
+          await prisma.attendanceSession.findUnique({
+            where: { sectionId_date: { sectionId: g5a.id, date: d } },
+          })
+        )
+          continue;
+        const roster = await prisma.studentEnrollment.findMany({
+          where: {
+            sectionId: g5a.id,
+            startDate: { lte: d },
+            OR: [{ endDate: null }, { endDate: { gt: d } }],
+          },
+          orderBy: { studentId: 'asc' },
+        });
+        if (!roster.length) continue;
+        const session = await prisma.attendanceSession.create({
+          data: {
+            ...scope,
+            sectionId: g5a.id,
+            academicYearId: year.id,
+            date: d,
+            createdByUserId: actor.id,
+            updatedByUserId: actor.id,
+          },
+        });
+        for (const [i, e] of roster.entries()) {
+          const status = pattern[(i + recorded) % pattern.length] ?? 'PRESENT';
+          const rec = await prisma.attendanceRecord.create({
+            data: {
+              ...scope,
+              sessionId: session.id,
+              studentId: e.studentId,
+              status,
+              note: status === 'LATE' ? 'Arrived after assembly' : null,
+            },
+          });
+          await prisma.attendanceRecordHistory.create({
+            data: {
+              ...scope,
+              recordId: rec.id,
+              toStatus: status,
+              toNote: rec.note,
+              changedByUserId: actor.id,
+            },
+          });
+        }
+        days += 1;
+      }
+    }
+
+    // Class work: SCHOOL_A Grade 5 A (by the assigned teachers); SCHOOL_B one admin-set item.
+    const target =
+      key === 'SCHOOL_A'
+        ? g5a
+        : await prisma.section.findFirst({
+            where: {
+              schoolId: school.id,
+              academicYearId: year.id,
+              branchId: branch.id,
+              isActive: true,
+            },
+            orderBy: [{ displayOrder: 'asc' }],
+          });
+    if (target) {
+      const today = localDate(branch.timezone);
+      const plus = (n: number) => new Date(`${localDate(branch.timezone, n)}T00:00:00Z`);
+      const subjectOf = async (code: string | null) =>
+        code
+          ? prisma.subject.findUnique({ where: { schoolId_code: { schoolId: school.id, code } } })
+          : ((
+              await prisma.gradeSubject.findFirst({
+                where: { gradeId: target.gradeId },
+                include: { subject: true },
+                orderBy: { displayOrder: 'asc' },
+              })
+            )?.subject ?? null);
+      const teacherOf = async (employeeId: string | null) =>
+        employeeId
+          ? prisma.teacher.findUnique({
+              where: { schoolId_employeeId: { schoolId: school.id, employeeId } },
+            })
+          : null;
+      const items: {
+        kind: 'homework' | 'assignment';
+        title: string;
+        subject: string | null;
+        teacher: string | null;
+        status: 'DRAFT' | 'PUBLISHED';
+        due: number;
+        text: string;
+      }[] =
+        key === 'SCHOOL_A'
+          ? [
+              {
+                kind: 'homework',
+                title: 'Fractions practice — page 42',
+                subject: 'MATH',
+                teacher: 'TCH001',
+                status: 'PUBLISHED',
+                due: 2,
+                text: 'Solve questions 1 to 10. Show your working.',
+              },
+              {
+                kind: 'homework',
+                title: 'Spelling list week 6',
+                subject: 'ENG',
+                teacher: 'TCH002',
+                status: 'DRAFT',
+                due: 5,
+                text: 'Learn the 15 words on the class list.',
+              },
+              {
+                kind: 'assignment',
+                title: 'Local plants field notes',
+                subject: 'EVS',
+                teacher: 'TCH003',
+                status: 'PUBLISHED',
+                due: 10,
+                text: 'Observe three plants near your home and describe their leaves.',
+              },
+            ]
+          : [
+              {
+                kind: 'homework',
+                title: 'Reading log — chapter 3',
+                subject: null,
+                teacher: null,
+                status: 'PUBLISHED',
+                due: 3,
+                text: 'Read chapter 3 and write two sentences about it.',
+              },
+            ];
+      for (const it of items) {
+        const subject = await subjectOf(it.subject);
+        const teacher = await teacherOf(it.teacher);
+        // Only subjects taught in the class's grade (the same rule the API enforces).
+        if (
+          !subject ||
+          !(await prisma.gradeSubject.findFirst({
+            where: { gradeId: target.gradeId, subjectId: subject.id },
+          }))
+        )
+          continue;
+        const model = it.kind === 'homework' ? prisma.homework : prisma.assignment;
+        if (
+          await (model as typeof prisma.homework).findFirst({
+            where: { sectionId: target.id, title: it.title },
+          })
+        )
+          continue;
+        await (model as typeof prisma.homework).create({
+          data: {
+            ...scope,
+            sectionId: target.id,
+            subjectId: subject.id,
+            teacherId: teacher?.id ?? null,
+            title: it.title,
+            instructions: it.text,
+            assignedDate: new Date(`${today}T00:00:00Z`),
+            dueDate: plus(it.due),
+            status: it.status,
+            publishedAt: it.status === 'PUBLISHED' ? new Date() : null,
+            createdByUserId: actor.id,
+          },
+        });
+        work += 1;
+      }
+    }
+    process.stdout.write(
+      `  operations ${key}: ${String(Object.keys(periods).length)} periods, +${String(lessons)} lessons, +${String(days)} attendance days, +${String(work)} homework/assignments\n`,
+    );
+  }
+}
+
 async function main(): Promise<void> {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('Refusing to seed demo tenants in production');
@@ -964,6 +1307,7 @@ async function main(): Promise<void> {
     await seedIdentities(prisma, app.get(PasswordHasher));
     await seedAcademic(prisma, Object.fromEntries(DEMO_TENANTS.map((d) => [d.key, d.timezone])));
     await seedPeople(prisma);
+    await seedOperations(prisma);
   } finally {
     await app.close();
   }
