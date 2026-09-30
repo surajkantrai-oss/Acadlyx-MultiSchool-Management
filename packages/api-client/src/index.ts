@@ -84,6 +84,14 @@ import type {
   UpdateTeacherRequest,
 } from '@acadlyx/types';
 import type {
+  AssignmentSubmissionList,
+  MobileAttendanceDay,
+  MobileChild,
+  MobileMe,
+  MobileStudentHome,
+  MobileWorkItem,
+  MobileWorkScope,
+  SubmitAssignmentRequest,
   AcademicSettings,
   AcademicYear,
   ApiErrorResponse,
@@ -219,6 +227,10 @@ export interface TenantUserListQuery {
 type MfaFactor = { code: string } | { recoveryCode: string };
 
 const enc = encodeURIComponent;
+
+/** Own (student) routes vs a parent's child routes. */
+const mobileBase = (studentId: string | null) =>
+  studentId === null ? 'mobile/student' : `mobile/parent/children/${enc(studentId)}`;
 
 /** `?a=1&b=x` from defined scalar values (empty string when none). */
 function qs(query: Record<string, string | number | boolean | undefined>): string {
@@ -582,6 +594,54 @@ export function createApiClient(options: ApiClientOptions) {
         request<TimetableWeek>(
           'GET',
           `timetable/teachers/${enc(teacherId)}${qs({ academicYearId })}`,
+        ),
+    },
+
+    /**
+     * Phase 8 mobile self-service API. Parent/Student routes are resolved from the signed-in
+     * user's own profile/relationships on the server — the client never sends identity.
+     */
+    mobile: {
+      me: () => request<MobileMe>('GET', 'mobile/me'),
+      children: () => request<MobileChild[]>('GET', 'mobile/parent/children'),
+      /** `studentId` null = the signed-in student (own data); else a parent's linked child. */
+      home: (studentId: string | null) =>
+        request<MobileStudentHome>('GET', `${mobileBase(studentId)}/home`),
+      attendance: (studentId: string | null) =>
+        request<StudentAttendanceSummary | null>('GET', `${mobileBase(studentId)}/attendance`),
+      attendanceDays: (
+        studentId: string | null,
+        query: { page?: number; pageSize?: number } = {},
+      ) =>
+        request<Paginated<MobileAttendanceDay>>(
+          'GET',
+          `${mobileBase(studentId)}/attendance/days${qs({ ...query })}`,
+        ),
+      work: (
+        studentId: string | null,
+        kind: ClassworkKind,
+        query: { scope?: MobileWorkScope; page?: number; pageSize?: number } = {},
+      ) =>
+        request<Paginated<MobileWorkItem>>(
+          'GET',
+          `${mobileBase(studentId)}/${kind}${qs({ ...query })}`,
+        ),
+      workItem: (studentId: string | null, kind: ClassworkKind, id: string) =>
+        request<MobileWorkItem>('GET', `${mobileBase(studentId)}/${kind}/${enc(id)}`),
+      timetable: (studentId: string | null) =>
+        request<TimetableWeek>('GET', `${mobileBase(studentId)}/timetable`),
+      submit: (assignmentId: string, body: SubmitAssignmentRequest) =>
+        request<MobileWorkItem>(
+          'PUT',
+          `mobile/student/assignments/${enc(assignmentId)}/submission`,
+          {
+            body,
+          },
+        ),
+      submissions: (assignmentId: string) =>
+        request<AssignmentSubmissionList>(
+          'GET',
+          `mobile/teacher/assignments/${enc(assignmentId)}/submissions`,
         ),
     },
 

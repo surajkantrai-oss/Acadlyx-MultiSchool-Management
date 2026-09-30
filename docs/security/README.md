@@ -84,3 +84,11 @@ Full design: [../architecture/MULTI_TENANCY.md](../architecture/MULTI_TENANCY.md
 - Every DTO uses class-validator decorators. Unknown fields are rejected globally.
 - Never log raw credentials, OTPs or tokens. Add new sensitive field names to `REDACT_PATHS`.
 - Serve files only through authorized or signed URLs (blueprint §21.1).
+
+## Phase 8 — mobile self-service
+
+- Parent access is relationship-scoped (own Parent profile → StudentGuardian); Student access is self-only; Teachers use Phase 7 permissions + Section/Subject scope. No broad reads are granted to Parents/Students.
+- The in-app active role is presentation only; the server authorises every request.
+- Tenant-bound builds: the tenant key is public identification, never auth. A session for another tenant is rejected (403) and discarded by the app.
+- SecureStore holds the refresh token and non-sensitive per-school preferences; the access token and academic data live in memory; sign-out clears them all.
+- Submission URLs are https-only, stored as text and never fetched server-side; submission content never enters the AuditLog.

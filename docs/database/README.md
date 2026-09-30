@@ -145,3 +145,7 @@ migration.
 See [../development/local-setup.md](../development/local-setup.md). `acadlyx` needs `CREATEDB`
 because `migrate dev` creates a shadow database. The tenant tables use FORCE RLS, so running
 queries as `acadlyx` without BYPASSRLS would return no rows.
+
+## Phase 8 migration `20260929100000_phase_8_mobile_assignment_submissions`
+
+`assignment_submissions` (unique assignment + student; content CHECKs: text/url present, https only; composite FKs to assignments/students) and `assignment_submission_history` (append-only; unique submission + version). ENABLE + FORCE RLS with `tenant_isolation`; no DELETE grant; only content/version/last-submitted columns are updatable. A new `assignments (id, school_id, tenant_id)` unique supports the composite FK.

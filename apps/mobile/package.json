@@ -2,7 +2,7 @@
   "name": "@acadlyx/mobile",
   "version": "0.1.0",
   "private": true,
-  "description": "Acadlyx mobile app (React Native + Expo). Branded per-tenant builds arrive in a later phase.",
+  "description": "Acadlyx white-label mobile app (React Native + Expo): one codebase, one school per build.",
   "main": "index.ts",
   "scripts": {
     "dev": "expo start",
@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings 0",
     "validate": "tsc --noEmit && expo install --check && expo config --type public > /dev/null && expo export --platform ios --platform android --output-dir .expo/export-check",
-    "clean": "rm -rf .expo"
+    "clean": "rm -rf .expo",
+    "test": "vitest run"
   },
   "dependencies": {
     "@acadlyx/api-client": "workspace:*",
@@ -19,17 +20,21 @@
     "@acadlyx/mobile-ui": "workspace:*",
     "@acadlyx/tenant-config": "workspace:*",
     "@acadlyx/types": "workspace:*",
-    "expo": "~57.0.25",
+    "@acadlyx/validation": "workspace:*",
+    "expo": "~57.0.26",
     "expo-crypto": "~57.0.3",
     "expo-secure-store": "~57.0.4",
+    "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
-    "react-native": "0.86.3"
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0"
   },
   "devDependencies": {
     "@types/react": "19.2.18",
     "eslint": "9.39.5",
     "eslint-config-expo": "57.0.2",
-    "typescript": "6.0.3"
+    "typescript": "6.0.3",
+    "vitest": "4.1.11"
   }
 }

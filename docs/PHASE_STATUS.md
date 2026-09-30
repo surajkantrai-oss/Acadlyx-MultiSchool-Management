@@ -8,8 +8,9 @@
 | 4     | School & Academic Configuration                            | **COMPLETE** (2026-09-27, commit `acd41c5`) |
 | 5     | Students, Parents, Teachers & Bulk Onboarding              | **COMPLETE** (2026-09-27, commit `64bc4e1`) |
 | 6     | School Admin Portal Core                                   | **COMPLETE** (2026-09-28, commit `d079903`) |
-| 7     | Attendance, Homework, Assignments & Timetable              | **COMPLETE — awaiting review** (2026-09-28) |
-| 8–15  | Later phases per project plan (15 = production deployment) | NOT STARTED                                 |
+| 7     | Attendance, Homework, Assignments & Timetable              | **COMPLETE** (2026-09-28, commit `acdd3b5`) |
+| 8     | White-Label Mobile App & Role Experiences                  | **COMPLETE — awaiting review** (2026-09-29) |
+| 9–15  | Later phases per project plan (15 = production deployment) | NOT STARTED                                 |
 
 ## Phase 7 verification (2026-09-28)
 

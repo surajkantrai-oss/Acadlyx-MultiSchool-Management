@@ -915,6 +915,7 @@ model Student {
   enrollments   StudentEnrollment[]
   statusHistory StudentStatusHistory[]
   attendance    AttendanceRecord[]
+  submissions   AssignmentSubmission[]
 
   /// One Student profile per login User (a user id belongs to exactly one tenant).
   @@unique([userId, tenantId])
@@ -1307,6 +1308,9 @@ model Assignment {
   subject Subject  @relation(fields: [subjectId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
   teacher Teacher? @relation(fields: [teacherId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
 
+  submissions AssignmentSubmission[]
+
+  @@unique([id, schoolId, tenantId])
   @@index([sectionId, status, dueDate])
   @@index([teacherId, status])
   @@index([tenantId, schoolId, status, dueDate])
@@ -1370,4 +1374,53 @@ model TimetableEntry {
   @@index([periodId])
   @@index([tenantId, schoolId, academicYearId])
   @@map("timetable_entries")
+}
+
+/// Phase 8 — a Student's current submission to an Assignment (decisions D–L). One row per
+/// Assignment + Student; the row existing means "submitted". Late is DERIVED (the FIRST
+/// submission's branch-local date > due date), never stored. Every accepted version is appended to
+/// AssignmentSubmissionHistory in the same transaction. No grades/feedback (Phase 9), no files.
+model AssignmentSubmission {
+  id               String   @id @default(uuid(7)) @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  schoolId         String   @map("school_id") @db.Uuid
+  assignmentId     String   @map("assignment_id") @db.Uuid
+  studentId        String   @map("student_id") @db.Uuid
+  textContent      String?  @map("text_content") @db.VarChar(5000)
+  externalUrl      String?  @map("external_url") @db.VarChar(2048)
+  version          Int      @default(1)
+  firstSubmittedAt DateTime @map("first_submitted_at") @db.Timestamptz(3)
+  lastSubmittedAt  DateTime @map("last_submitted_at") @db.Timestamptz(3)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  assignment Assignment                    @relation(fields: [assignmentId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  student    Student                       @relation(fields: [studentId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+  history    AssignmentSubmissionHistory[]
+
+  @@unique([assignmentId, studentId])
+  @@unique([id, schoolId, tenantId])
+  @@index([studentId])
+  @@index([tenantId, schoolId])
+  @@map("assignment_submissions")
+}
+
+/// Phase 8 — append-only: every accepted submission version (content, time, submitting user).
+model AssignmentSubmissionHistory {
+  id                String   @id @default(uuid(7)) @db.Uuid
+  tenantId          String   @map("tenant_id") @db.Uuid
+  schoolId          String   @map("school_id") @db.Uuid
+  submissionId      String   @map("submission_id") @db.Uuid
+  version           Int
+  textContent       String?  @map("text_content") @db.VarChar(5000)
+  externalUrl       String?  @map("external_url") @db.VarChar(2048)
+  submittedAt       DateTime @map("submitted_at") @db.Timestamptz(3)
+  submittedByUserId String   @map("submitted_by_user_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  submission AssignmentSubmission @relation(fields: [submissionId, schoolId, tenantId], references: [id, schoolId, tenantId], onDelete: Restrict)
+
+  @@unique([submissionId, version])
+  @@index([tenantId])
+  @@map("assignment_submission_history")
 }

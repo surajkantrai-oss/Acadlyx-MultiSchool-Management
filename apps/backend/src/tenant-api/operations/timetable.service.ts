@@ -18,6 +18,7 @@ import {
   personName,
   scopedSection,
   sectionUsable,
+  type SectionWithOps,
 } from './ops-scope.js';
 import type {
   CreateEntryDto,
@@ -322,29 +323,7 @@ export class TimetableService {
       const school = await this.store.school(tx);
       const scope = await myAssignments(tx, school);
       const section = await scopedSection(tx, school, scope, sectionId);
-      const [periods, entries] = await Promise.all([
-        tx.timetablePeriod.findMany({
-          where: {
-            schoolId: school.id,
-            branchId: section.branchId,
-            academicYearId: section.academicYearId,
-          },
-          orderBy: [{ displayOrder: 'asc' }, { startTime: 'asc' }],
-        }),
-        tx.timetableEntry.findMany({ where: { sectionId: section.id }, include: ENTRY_INCLUDE }),
-      ]);
-      return {
-        view: 'section',
-        title: `${section.grade.name} ${section.name} · ${section.branch.name}`,
-        academicYearId: section.academicYearId,
-        academicYearName: section.academicYear.name,
-        workingDays: orderedDays(school),
-        periods: periods.map(toPeriod),
-        entries: entries.map((e) => toEntry(e, new Map(periods.map((p) => [p.id, p.name])))),
-        editable:
-          currentAuth().permissions.includes('timetable.manage') &&
-          section.academicYear.status !== 'CLOSED',
-      };
+      return buildSectionWeek(tx, school, section);
     });
   }
 
@@ -508,5 +487,40 @@ function toEntry(e: EntryRow, names: PeriodNames): EntryDto {
     subjectName: e.subject.name,
     teacherId: e.teacherId,
     teacherName: personName(e.teacher),
+  };
+}
+
+/**
+ * A section's weekly timetable. The caller must already have authorised access to the section
+ * (staff scope, or — Phase 8 — the student's own / a parent's child's class). Management is only
+ * ever offered to `timetable.manage` holders on a non-CLOSED year.
+ */
+export async function buildSectionWeek(
+  tx: TenantTransaction,
+  school: School,
+  section: SectionWithOps,
+): Promise<TimetableWeek> {
+  const [periods, entries] = await Promise.all([
+    tx.timetablePeriod.findMany({
+      where: {
+        schoolId: school.id,
+        branchId: section.branchId,
+        academicYearId: section.academicYearId,
+      },
+      orderBy: [{ displayOrder: 'asc' }, { startTime: 'asc' }],
+    }),
+    tx.timetableEntry.findMany({ where: { sectionId: section.id }, include: ENTRY_INCLUDE }),
+  ]);
+  return {
+    view: 'section',
+    title: `${section.grade.name} ${section.name} · ${section.branch.name}`,
+    academicYearId: section.academicYearId,
+    academicYearName: section.academicYear.name,
+    workingDays: orderedDays(school),
+    periods: periods.map(toPeriod),
+    entries: entries.map((e) => toEntry(e, new Map(periods.map((p) => [p.id, p.name])))),
+    editable:
+      currentAuth().permissions.includes('timetable.manage') &&
+      section.academicYear.status !== 'CLOSED',
   };
 }

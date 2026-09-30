@@ -1,0 +1,17 @@
+{
+  "tenantKey": "SCHOOL_B",
+  "displayName": "Demo School B",
+  "slug": "acadlyx-demo-school-b",
+  "scheme": "acadlyx-demo-school-b",
+  "iosBundleIdentifier": "com.acadlyx.demo.schoolb",
+  "androidPackage": "com.acadlyx.demo.schoolb",
+  "assets": {
+    "icon": "./assets/icon.png",
+    "splash": "./assets/splash-icon.png",
+    "splashBackground": "#F8FAFC",
+    "adaptiveIconForeground": "./assets/android-icon-foreground.png",
+    "adaptiveIconBackground": "./assets/android-icon-background.png",
+    "adaptiveIconMonochrome": "./assets/android-icon-monochrome.png",
+    "adaptiveIconBackgroundColor": "#F8FAFC"
+  }
+}

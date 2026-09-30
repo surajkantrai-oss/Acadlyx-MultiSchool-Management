@@ -49,6 +49,9 @@ export const TENANT_SCOPED_MODELS: Readonly<Record<string, 'id' | 'tenantId'>> =
   Assignment: 'tenantId',
   TimetablePeriod: 'tenantId',
   TimetableEntry: 'tenantId',
+  // Phase 8 — assignment submissions.
+  AssignmentSubmission: 'tenantId',
+  AssignmentSubmissionHistory: 'tenantId',
 };
 
 /**

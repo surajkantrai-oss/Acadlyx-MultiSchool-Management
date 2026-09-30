@@ -152,33 +152,6 @@ export function MfaScreen({ color }: { color: string }) {
 }
 
 /** Phase 3 placeholder after sign-in: identity + roles + sign out. No feature screens yet. */
-export function SignedInScreen({ color }: { color: string }) {
-  const { state, signOut } = useAuth();
-  const [busy, setBusy] = useState(false);
-  if (state.status !== 'signedIn') return null;
-  const { me } = state;
-  return (
-    <View style={styles.form}>
-      <Heading>Welcome, {me.displayName}</Heading>
-      <BodyText>{me.tenant?.displayName}</BodyText>
-      <Text testID="roles" style={styles.roles}>
-        {me.roles.join(' · ')}
-      </Text>
-      <View style={styles.spacer} />
-      <PrimaryButton
-        testID="sign-out"
-        label="Sign out"
-        busy={busy}
-        color={color}
-        onPress={() => {
-          setBusy(true);
-          void signOut();
-        }}
-      />
-    </View>
-  );
-}
-
 export function StatusScreen({
   title,
   detail,

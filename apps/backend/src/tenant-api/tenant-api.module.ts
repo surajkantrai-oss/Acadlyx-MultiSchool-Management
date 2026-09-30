@@ -7,6 +7,7 @@ import { TenantResolutionMiddleware } from '../tenancy/tenant-resolution.middlew
 import { ACADEMIC_CONTROLLERS } from './academic/academic.controllers.js';
 import { ACADEMIC_PROVIDERS } from './academic/academic.providers.js';
 import { IMPORT_QUEUE } from './imports/imports.service.js';
+import { MOBILE_CONTROLLERS, MOBILE_PROVIDERS } from './mobile/mobile.controllers.js';
 import { PEOPLE_CONTROLLERS } from './people/people.controllers.js';
 import { PEOPLE_PROVIDERS } from './people/people.providers.js';
 import {
@@ -28,6 +29,7 @@ const TENANT_CONTROLLERS = [
   ...PEOPLE_CONTROLLERS,
   ...WORKSPACE_CONTROLLERS,
   ...OPERATIONS_CONTROLLERS,
+  ...MOBILE_CONTROLLERS,
 ];
 
 /**
@@ -44,6 +46,7 @@ const TENANT_CONTROLLERS = [
     ...PEOPLE_PROVIDERS,
     WorkspaceService,
     ...OPERATIONS_PROVIDERS,
+    ...MOBILE_PROVIDERS,
   ],
 })
 export class TenantApiModule implements NestModule {

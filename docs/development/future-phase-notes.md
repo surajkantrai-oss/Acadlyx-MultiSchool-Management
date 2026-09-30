@@ -81,3 +81,10 @@ Items noticed during Phase 1 that were intentionally **not** implemented.
   in `.github/workflows/ci.yml` and does not deploy.
 - AWS/Terraform resources, Secrets Manager integration and CloudWatch/Sentry.
 - White-label mobile build pipeline (blueprint §24.2).
+
+## After Phase 8
+
+- Phase 9: grading/feedback on submissions (new tables; submissions stay immutable history).
+- Documents phase: file attachments for submissions.
+- Notifications phase: push (no permission is requested today).
+- Production hardening: crash reporting, real per-school icons/splash, EAS profiles and signing managed outside the repo.

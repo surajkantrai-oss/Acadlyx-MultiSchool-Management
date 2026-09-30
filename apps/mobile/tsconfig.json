@@ -10,5 +10,5 @@
     "noUnusedParameters": true
   },
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules", ".expo/export-check"]
+  "exclude": ["node_modules", ".expo/export-check", "app.config.ts", "vitest.config.ts"]
 }

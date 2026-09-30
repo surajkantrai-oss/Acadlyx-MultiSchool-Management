@@ -10,7 +10,8 @@ import {
   useRef,
   useState,
 } from 'react';
-import { api, setAccessToken } from '../lib/api';
+import { api, setAccessToken, setRefreshHandler } from '../lib/api';
+import { prefs } from '../lib/prefs';
 import { deviceDescriptor } from './installation-id';
 import { secureStorage, storageKeys } from './secure-storage';
 
@@ -109,9 +110,28 @@ export function AuthProvider({ tenantKey, children }: { tenantKey: string; child
     return () => clearTimeout(t);
   }, [accessExpiresAt, clearLocal, rotate]);
 
+  // Expired access token mid-request → rotate once (single-flight) and let the caller retry.
+  useEffect(() => {
+    setRefreshHandler(() =>
+      rotate()
+        .then(() => true)
+        .catch(async (error: unknown) => {
+          if (error instanceof ApiError && error.status < 500) {
+            await clearLocal();
+            setState({ status: 'signedOut', notice: 'Your session ended. Please sign in again.' });
+          }
+          return false;
+        }),
+    );
+    return () => setRefreshHandler(null);
+  }, [clearLocal, rotate]);
+
   const loadMe = useCallback(async () => {
-    setState({ status: 'signedIn', me: await auth.me() });
-  }, [auth]);
+    const me = await auth.me();
+    // A session for another school (e.g. a development build re-pointed) is never reused.
+    if (me.tenant?.key !== tenantKey) throw new ApiError(401, null);
+    setState({ status: 'signedIn', me });
+  }, [auth, tenantKey]);
 
   /** Resumes from the stored refresh token (read by the caller from secure storage). */
   const resume = useCallback(
@@ -188,10 +208,11 @@ export function AuthProvider({ tenantKey, children }: { tenantKey: string; child
       signOut: async () => {
         await auth.logout().catch(() => undefined); // best effort; local credentials go regardless
         await clearLocal();
+        await prefs.clear(tenantKey); // selected child / active role
         setState({ status: 'signedOut' });
       },
     }),
-    [adopt, auth, clearLocal, loadMe, restore, state],
+    [adopt, auth, clearLocal, loadMe, restore, state, tenantKey],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

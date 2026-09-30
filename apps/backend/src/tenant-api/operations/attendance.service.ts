@@ -349,34 +349,7 @@ export class AttendanceService {
         select: { id: true },
       });
       if (!student) throw OPS_ERRORS.studentNotFound();
-      const year = academicYearId
-        ? await tx.academicYear.findFirst({ where: { id: academicYearId, schoolId: school.id } })
-        : await tx.academicYear.findFirst({ where: { schoolId: school.id, isCurrent: true } });
-      if (!year) return null;
-      const where = { studentId: student.id, session: { academicYearId: year.id } };
-      const [grouped, recent] = await Promise.all([
-        tx.attendanceRecord.groupBy({ by: ['status'], where, _count: { _all: true } }),
-        tx.attendanceRecord.findMany({
-          where,
-          include: { session: { include: { section: { include: { grade: true } } } } },
-          orderBy: { session: { date: 'desc' } },
-          take: 10,
-        }),
-      ]);
-      const counts = { PRESENT: 0, ABSENT: 0, LATE: 0, EXCUSED: 0 };
-      for (const g of grouped) counts[g.status] = g._count._all;
-      return {
-        academicYearId: year.id,
-        academicYearName: year.name,
-        counts,
-        attendanceRate: roundRate(attendancePercentage(counts)),
-        recent: recent.map((r) => ({
-          date: isoDate(r.session.date),
-          sectionName: `${r.session.section.grade.name} ${r.session.section.name}`,
-          status: r.status,
-          note: r.note,
-        })),
-      };
+      return attendanceSummaryFor(tx, school, student.id, academicYearId);
     });
   }
 
@@ -516,3 +489,44 @@ function lockError(reason: NonNullable<AttendanceSheet['lockedReason']>) {
 }
 
 export { STATUSES as ATTENDANCE_STATUS_ORDER };
+
+/**
+ * One student's attendance summary for the given (default: current) year — the single
+ * implementation of the Phase 7 formula, shared by the staff API and the Phase 8 mobile views.
+ * The caller must already have authorised access to this student.
+ */
+export async function attendanceSummaryFor(
+  tx: TenantTransaction,
+  school: School,
+  studentId: string,
+  academicYearId?: string,
+): Promise<StudentAttendanceSummary | null> {
+  const year = academicYearId
+    ? await tx.academicYear.findFirst({ where: { id: academicYearId, schoolId: school.id } })
+    : await tx.academicYear.findFirst({ where: { schoolId: school.id, isCurrent: true } });
+  if (!year) return null;
+  const where = { studentId, session: { academicYearId: year.id } };
+  const [grouped, recent] = await Promise.all([
+    tx.attendanceRecord.groupBy({ by: ['status'], where, _count: { _all: true } }),
+    tx.attendanceRecord.findMany({
+      where,
+      include: { session: { include: { section: { include: { grade: true } } } } },
+      orderBy: { session: { date: 'desc' } },
+      take: 10,
+    }),
+  ]);
+  const counts = { PRESENT: 0, ABSENT: 0, LATE: 0, EXCUSED: 0 };
+  for (const g of grouped) counts[g.status] = g._count._all;
+  return {
+    academicYearId: year.id,
+    academicYearName: year.name,
+    counts,
+    attendanceRate: roundRate(attendancePercentage(counts)),
+    recent: recent.map((r) => ({
+      date: isoDate(r.session.date),
+      sectionName: `${r.session.section.grade.name} ${r.session.section.name}`,
+      status: r.status,
+      note: r.note,
+    })),
+  };
+}

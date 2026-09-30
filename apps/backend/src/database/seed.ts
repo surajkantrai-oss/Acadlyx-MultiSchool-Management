@@ -641,6 +641,15 @@ const DEMO_PEOPLE: DemoPeople[] = [
         linkLoginId: 'STU001',
       },
       {
+        // Aarav's younger sister — Pooja's second child, for the Phase 8 child switcher.
+        admission: 'STU007',
+        first: 'Anaya',
+        last: 'Verma',
+        dob: '2018-03-09',
+        section: ['MAIN', 'G4', 'A'],
+        guardians: [['PAR-A001', 'MOTHER', true]],
+      },
+      {
         admission: 'STU002',
         first: 'Diya',
         last: 'Sharma',
@@ -1130,7 +1139,6 @@ async function seedOperations(prisma: PrismaClient): Promise<void> {
             orderBy: [{ displayOrder: 'asc' }],
           });
     if (target) {
-      const today = localDate(branch.timezone);
       const plus = (n: number) => new Date(`${localDate(branch.timezone, n)}T00:00:00Z`);
       const subjectOf = async (code: string | null) =>
         code
@@ -1153,8 +1161,10 @@ async function seedOperations(prisma: PrismaClient): Promise<void> {
         title: string;
         subject: string | null;
         teacher: string | null;
-        status: 'DRAFT' | 'PUBLISHED';
+        status: 'DRAFT' | 'PUBLISHED' | 'CLOSED';
         due: number;
+        /** Days from today the work was assigned (default 0). */
+        assigned?: number;
         text: string;
       }[] =
         key === 'SCHOOL_A'
@@ -1186,6 +1196,27 @@ async function seedOperations(prisma: PrismaClient): Promise<void> {
                 due: 10,
                 text: 'Observe three plants near your home and describe their leaves.',
               },
+              // Phase 8 submission states: past due but still open (late), and closed.
+              {
+                kind: 'assignment',
+                title: 'Water cycle poster',
+                subject: 'EVS',
+                teacher: 'TCH003',
+                status: 'PUBLISHED',
+                assigned: -6,
+                due: -2,
+                text: 'Draw the water cycle and label each stage.',
+              },
+              {
+                kind: 'assignment',
+                title: 'Seeds and sprouts quiz',
+                subject: 'EVS',
+                teacher: 'TCH003',
+                status: 'CLOSED',
+                assigned: -9,
+                due: -4,
+                text: 'Answer the five questions about how seeds sprout.',
+              },
             ]
           : [
               {
@@ -1216,7 +1247,8 @@ async function seedOperations(prisma: PrismaClient): Promise<void> {
           })
         )
           continue;
-        await (model as typeof prisma.homework).create({
+        // Assignment is the wider type (adds CLOSED); homework items are only DRAFT/PUBLISHED.
+        await (model as typeof prisma.assignment).create({
           data: {
             ...scope,
             sectionId: target.id,
@@ -1224,10 +1256,11 @@ async function seedOperations(prisma: PrismaClient): Promise<void> {
             teacherId: teacher?.id ?? null,
             title: it.title,
             instructions: it.text,
-            assignedDate: new Date(`${today}T00:00:00Z`),
+            assignedDate: plus(it.assigned ?? 0),
             dueDate: plus(it.due),
             status: it.status,
-            publishedAt: it.status === 'PUBLISHED' ? new Date() : null,
+            publishedAt: it.status === 'DRAFT' ? null : new Date(),
+            ...(it.status === 'CLOSED' ? { closedAt: new Date() } : {}),
             createdByUserId: actor.id,
           },
         });

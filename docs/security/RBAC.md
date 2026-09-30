@@ -156,3 +156,7 @@ Granted only to Principal and School Admin. It gates the humanised AuditLog feed
 - **Why `attendance.backdate` is separate.** Teachers are limited to today and the previous 7
   school-local calendar days (approved decision C); only holders of this permission may correct older dates.
   Future dates are never allowed, and CLOSED years are read-only for everyone.
+
+## Phase 8
+
+No new permissions. Parent/Student mobile routes are `@Authenticated('TENANT')` and authorised by profile ownership/relationship in the service; teacher submission review reuses `assignment.read` with Section + Subject scope. `attendance.backdate` stays Principal/School Admin only.

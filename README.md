@@ -212,3 +212,7 @@ CI (`.github/workflows/ci.yml`) runs the same gates on every push to `main` and 
 request: Node 22.23.2, pnpm 11.19.0, frozen install, PostgreSQL 17 and Redis 8 services, database
 role setup and `migrate deploy`, throwaway per-run auth key rings, a committed-secret guard, and
 the web auth e2e suites. It does not deploy.
+
+### White-label mobile & role experiences (Phase 8)
+
+One React Native codebase, one school per build, no school picker. Choose the school with `ACADLYX_TENANT` (e.g. `school-a`, `school-b`; see `apps/mobile/white-label/`). Parents (linked children only), Students (self only; text + https-link submissions) and Teachers (assigned classes/subjects) get role-specific tabs. See [docs/architecture/WHITE_LABEL_MOBILE.md](docs/architecture/WHITE_LABEL_MOBILE.md), [MOBILE_ROLE_EXPERIENCES.md](docs/architecture/MOBILE_ROLE_EXPERIENCES.md), [ASSIGNMENT_SUBMISSIONS.md](docs/architecture/ASSIGNMENT_SUBMISSIONS.md) and [docs/api/MOBILE.md](docs/api/MOBILE.md).
