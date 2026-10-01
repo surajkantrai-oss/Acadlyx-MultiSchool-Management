@@ -52,6 +52,24 @@ export const TENANT_SCOPED_MODELS: Readonly<Record<string, 'id' | 'tenantId'>> =
   // Phase 8 — assignment submissions.
   AssignmentSubmission: 'tenantId',
   AssignmentSubmissionHistory: 'tenantId',
+  // Phase 9 — exams, marks, results & report cards; assignment grading.
+  GradeScale: 'tenantId',
+  GradeBand: 'tenantId',
+  Exam: 'tenantId',
+  ExamSubject: 'tenantId',
+  ExamComponent: 'tenantId',
+  ExamComponentSchedule: 'tenantId',
+  ExamMarkSheet: 'tenantId',
+  ExamMarkSheetEvent: 'tenantId',
+  StudentExamMark: 'tenantId',
+  StudentExamMarkHistory: 'tenantId',
+  StudentExamRemark: 'tenantId',
+  ResultPublication: 'tenantId',
+  ResultStudentSnapshot: 'tenantId',
+  ResultSubjectSnapshot: 'tenantId',
+  ResultComponentSnapshot: 'tenantId',
+  AssignmentSubmissionGrade: 'tenantId',
+  AssignmentSubmissionGradeHistory: 'tenantId',
 };
 
 /**

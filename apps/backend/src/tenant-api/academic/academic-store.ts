@@ -59,9 +59,10 @@ export class AcademicStore {
    */
   async transact<T>(
     fn: (tx: TenantTransaction, school: School, events: AuditEvent[]) => Promise<T>,
+    options?: { timeout?: number },
   ): Promise<T> {
     const events: AuditEvent[] = [];
-    const result = await this.db.run(async (tx) => fn(tx, await this.school(tx), events));
+    const result = await this.db.run(async (tx) => fn(tx, await this.school(tx), events), options);
     for (const event of events) await this.audit.recordTenant(event);
     return result;
   }

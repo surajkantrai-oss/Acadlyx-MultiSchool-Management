@@ -165,9 +165,11 @@ describe('Tenant authentication (e2e)', () => {
       // teachers' read-only academic structure); PARENT adds nothing beyond the workspace.
       expect(me.permissions).toEqual(permissionsForRoles(['TEACHER', 'PARENT']));
       expect(me.permissions).toEqual(permissionsForRoles(['TEACHER']));
-      // Phase 7: a teacher's only manage permissions are the resource-scoped class operations.
+      // Phase 7/9: a teacher's only manage permissions are resource-scoped class operations
+      // (assignment grading is scoped to the teacher's Section + Subject).
       expect(me.permissions.filter((p) => p.endsWith('.manage')).sort()).toEqual([
         'assignment.manage',
+        'assignment_grade.manage',
         'attendance.manage',
         'homework.manage',
       ]);

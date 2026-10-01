@@ -10,7 +10,7 @@ export function SideNav({ groups }: { groups: NavGroup[] }) {
   const active = (href: string) =>
     href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
   return (
-    <nav aria-label="Workspace" className="md:w-56 md:shrink-0" data-testid="side-nav">
+    <nav aria-label="Workspace" className="md:w-56 md:shrink-0 print:hidden" data-testid="side-nav">
       <div className="flex flex-wrap gap-x-6 gap-y-3 md:flex-col">
         {groups.map((group) => (
           <div key={group.label}>

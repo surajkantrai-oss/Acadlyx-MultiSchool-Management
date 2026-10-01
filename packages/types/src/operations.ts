@@ -125,6 +125,8 @@ export interface ClassworkItem<
   instructions: string | null;
   assignedDate: string;
   dueDate: string;
+  /** Phase 9: assignments only; null = feedback-only (homework: always null). */
+  maxMarks: string | null;
   status: S;
   version: number;
   createdByName: string | null;
@@ -161,6 +163,8 @@ export interface SaveClassworkRequest {
   dueDate: string;
   /** Leadership may name the responsible teacher; teachers are always themselves. */
   teacherId?: string | null;
+  /** Phase 9, assignments only: "20" / "12.5"; null = feedback-only. */
+  maxMarks?: string | null;
 }
 export type UpdateClassworkRequest = Partial<
   Omit<SaveClassworkRequest, 'sectionId' | 'subjectId'>

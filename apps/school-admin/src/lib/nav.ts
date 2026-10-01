@@ -36,6 +36,8 @@ export function buildNav(can: (p: PermissionKey) => boolean): NavGroup[] {
         can('attendance.read') && { href: '/attendance', label: 'Attendance' },
         can('homework.read') && { href: '/homework', label: 'Homework' },
         can('assignment.read') && { href: '/assignments', label: 'Assignments' },
+        // Phase 9 — exams, marks, results and report cards.
+        can('exam.read') && { href: '/exams', label: 'Exams', match: ['/exams'] },
         can('timetable.read') && { href: '/timetable', label: 'Timetable' },
         can('grade.read') && { href: '/settings/grades', label: 'Grades & sections' },
         can('subject.read') && { href: '/settings/subjects', label: 'Subjects' },

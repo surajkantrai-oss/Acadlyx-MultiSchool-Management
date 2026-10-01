@@ -25,6 +25,11 @@ const ALLOWED: RegExp[] = [
   /^attendance(\/(classes|students\/[\w-]+|sections\/[\w-]+(\/(history|changes))?))?$/,
   /^(homework|assignments)(\/(targets|[\w-]+(\/(publish|close|archive))?))?$/,
   /^timetable\/(periods(\/(order|[\w-]+))?|entries(\/[\w-]+)?|sections\/[\w-]+|teachers\/[\w-]+)$/,
+  // Phase 9 — exams, marks, results, report cards and assignment grading.
+  /^grade-scales(\/[\w-]+)?$/,
+  /^exams(\/[\w-]+(\/(transitions\/[\w-]+|subjects(\/[\w-]+(\/components)?)?|components\/[\w-]+(\/schedules\/[\w-]+)?|sheets(\/[\w-]+\/[\w-]+(\/(submit|finalize|reopen))?)?|results(\/(publish|students\/[\w-]+))?|remarks\/[\w-]+|publications))?)?$/,
+  /^result-publications\/[\w-]+\/students\/[\w-]+$/,
+  /^assignments\/[\w-]+\/(grading|submissions\/[\w-]+\/versions\/\d+\/grade(\/publish)?)$/,
   /^imports(\/(templates\/(STUDENTS|PARENTS|TEACHERS)(\/file)?|[\w-]+(\/(rows|errors\.csv|confirm|cancel))?))?$/,
 ];
 

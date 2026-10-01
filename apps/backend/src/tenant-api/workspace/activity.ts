@@ -61,6 +61,10 @@ const MESSAGES: Record<string, (m: Record<string, unknown>) => string> = {
   ASSIGNMENT_PUBLISHED: () => 'Assignment published',
   TIMETABLE_ENTRY_CREATED: () => 'Timetable updated',
   TIMETABLE_ENTRY_REMOVED: () => 'Timetable updated',
+  // Phase 9 — exam / class level only: never an individual student's marks or result.
+  EXAM_PUBLISHED: () => 'Exam published',
+  MARK_SHEET_FINALIZED: () => 'Marks finalized',
+  RESULTS_PUBLISHED: () => 'Results published',
 };
 const ACTIONS = Object.keys(MESSAGES);
 
@@ -110,6 +114,29 @@ export async function recentActivity(
     ...ids(of('homework'), (r) => r.metadata?.sectionId),
     ...ids(of('assignment'), (r) => r.metadata?.sectionId),
   ];
+  const [exams, markSheets] = await Promise.all([
+    tx.exam.findMany({
+      where: {
+        ...s,
+        id: {
+          in: [
+            ...ids(of('exam'), (r) => r.resource_id),
+            ...ids(of('exam_mark_sheet'), (r) => r.metadata?.examId),
+          ],
+        },
+      },
+      select: { id: true, name: true },
+    }),
+    tx.examMarkSheet.findMany({
+      where: { ...s, id: { in: ids(of('exam_mark_sheet'), (r) => r.resource_id) } },
+      select: {
+        id: true,
+        examId: true,
+        section: { select: { name: true, grade: { select: { name: true } } } },
+        examSubject: { select: { subject: { select: { name: true } } } },
+      },
+    }),
+  ]);
   const [sessions, homework, classAssignments, sections] = await Promise.all([
     tx.attendanceSession.findMany({
       where: { ...s, id: { in: ids(of('attendance_session'), (r) => r.resource_id) } },
@@ -200,6 +227,8 @@ export async function recentActivity(
   const ss = new Map(sessions.map((x) => [x.id, x]));
   const hw = new Map(homework.map((x) => [x.id, x]));
   const ca = new Map(classAssignments.map((x) => [x.id, x]));
+  const ex = byId(exams);
+  const ms = byId(markSheets);
   const cls = (sectionId: string | undefined, href: string | null): Resolved => {
     const label = sectionId ? se.get(sectionId) : undefined;
     return label ? { name: label, href } : null;
@@ -251,6 +280,20 @@ export async function recentActivity(
       case 'timetable_entry': {
         const sid = typeof r.metadata?.sectionId === 'string' ? r.metadata.sectionId : undefined;
         return cls(sid, sid ? `/timetable?section=${sid}` : null);
+      }
+      case 'exam': {
+        const x = ex.get(id);
+        return x ? { name: x.name, href: `/exams/${x.id}` } : null;
+      }
+      case 'exam_mark_sheet': {
+        const x = ms.get(id);
+        const e = x ? ex.get(x.examId) : undefined;
+        return x && e
+          ? {
+              name: `${e.name} · ${x.section.grade.name} ${x.section.name} ${x.examSubject.subject.name}`,
+              href: `/exams/${e.id}`,
+            }
+          : null;
       }
       case 'user': {
         const p = pr.get(id);

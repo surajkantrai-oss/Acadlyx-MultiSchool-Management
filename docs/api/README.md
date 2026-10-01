@@ -8,3 +8,6 @@ All endpoints are under `/api/v1`. Errors use the standard `ApiErrorResponse` sh
 - Attendance, homework, assignments and timetable (Phase 7): [ACADEMIC_OPERATIONS.md](ACADEMIC_OPERATIONS.md)
 - School Admin workspace — dashboard, classes/rosters, global search, login access (Phase 6): [../architecture/SCHOOL_ADMIN_PORTAL.md](../architecture/SCHOOL_ADMIN_PORTAL.md)
 - Tenant resolution and bootstrap: [../architecture/MULTI_TENANCY.md](../architecture/MULTI_TENANCY.md)
+
+- Exams, marks, results, report cards and assignment grading (Phase 9): [ASSESSMENT.md](ASSESSMENT.md)
+- Mobile self-service (Phases 8–9): [MOBILE.md](MOBILE.md)

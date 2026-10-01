@@ -149,3 +149,27 @@ queries as `acadlyx` without BYPASSRLS would return no rows.
 ## Phase 8 migration `20260929100000_phase_8_mobile_assignment_submissions`
 
 `assignment_submissions` (unique assignment + student; content CHECKs: text/url present, https only; composite FKs to assignments/students) and `assignment_submission_history` (append-only; unique submission + version). ENABLE + FORCE RLS with `tenant_isolation`; no DELETE grant; only content/version/last-submitted columns are updatable. A new `assignments (id, school_id, tenant_id)` unique supports the composite FK.
+
+## Phase 9 migration `20260930100000_phase_9_exams_marks_results_report_cards`
+
+- **Enums:** `exam_status`, `mark_sheet_status`, `mark_status`, `result_outcome` and `grade_release_status`.
+- **Column:** `assignments.max_marks NUMERIC(7,2)`, nullable, with the CHECK `> 0`.
+- **17 tenant tables**, all ENABLE + FORCE RLS with a `tenant_isolation` policy and composite `(id, school_id, tenant_id)` FKs:
+  - `grade_scales`, `grade_bands`
+  - `exams`, `exam_subjects`, `exam_components`, `exam_component_schedules`
+  - `exam_mark_sheets`, `exam_mark_sheet_events`
+  - `student_exam_marks`, `student_exam_mark_history`, `student_exam_remarks`
+  - `result_publications`, `result_student_snapshots`, `result_subject_snapshots`, `result_component_snapshots`
+  - `assignment_submission_grades`, `assignment_submission_grade_history`
+- **Integrity:**
+  - Case-insensitive unique names (scale per school + year, exam per school + year, component per subject, band label per scale).
+  - `EXCLUDE` gist constraints: bands must not overlap, and schedules of the same exam + grade + branch must not overlap in time.
+  - Only one current publication per exam (partial unique index).
+  - The mark state ↔ value CHECK.
+  - Triggers: marks ≤ component max, the component max cannot drop below stored marks, and a grade ≤ the assignment max (no marks at all when max is NULL).
+  - The deeper composite FKs (e.g. component → exam + grade, sheet → section of the same grade and year) prevent cross-school and cross-grade links even inside one tenant.
+- **Grants:**
+  - History and snapshot tables are SELECT/INSERT only.
+  - Marks and sheets have no DELETE grant.
+  - Only named columns are updatable.
+  - `result_publications` can update `is_current` only.

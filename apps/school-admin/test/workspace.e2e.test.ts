@@ -216,8 +216,9 @@ describe('School Admin — workspace (Phase 6)', () => {
       'dashboard-imports',
     ])
       expect(html, id).toContain(`data-testid="${id}"`);
-    // No cards for modules that do not exist yet (Phase 7 made homework/attendance real).
-    expect(html).not.toMatch(/Fees|Exam|Results|Report card/);
+    // No cards for modules that do not exist yet (Phase 7 made homework/attendance real;
+    // Phase 9 made exams/results real — they appear in the Academics menu, not as cards).
+    expect(html).not.toMatch(/Fees|Report card/);
     const dash = await api(admin, 'workspace/dashboard');
     expect(dash.status).toBe(200);
     expect(dash.json).toMatchObject({

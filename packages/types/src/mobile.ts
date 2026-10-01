@@ -10,6 +10,7 @@ import type {
   StudentAttendanceSummary,
   TimetableEntry,
 } from './operations.js';
+import type { VisibleGrade } from './assessment.js';
 
 /** Roles with a mobile experience. Selecting one changes the UI only. */
 export type MobileRole = 'PARENT' | 'STUDENT' | 'TEACHER';
@@ -97,6 +98,12 @@ export interface MobileWorkItem {
   overdue: boolean;
   /** Assignments only (null for homework or when nothing was submitted). */
   submission: MobileSubmission | null;
+  /** Phase 9: assignment max marks (null = feedback-only / not numerically graded). */
+  maxMarks: string | null;
+  /** Phase 9: the PUBLISHED grade of the LATEST submission version only (never a draft). */
+  grade: VisibleGrade | null;
+  /** Phase 9: a submission exists but its latest version has no published grade yet. */
+  awaitingGrading: boolean;
   /** Assignments only: whether this caller may submit now, and if not, why. */
   canSubmit: boolean;
   blockedReason: SubmissionBlockedReason | null;

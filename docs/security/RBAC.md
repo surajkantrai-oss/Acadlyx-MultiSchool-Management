@@ -160,3 +160,26 @@ Granted only to Principal and School Admin. It gates the humanised AuditLog feed
 ## Phase 8
 
 No new permissions. Parent/Student mobile routes are `@Authenticated('TENANT')` and authorised by profile ownership/relationship in the service; teacher submission review reuses `assignment.read` with Section + Subject scope. `attendance.backdate` stays Principal/School Admin only.
+
+## Phase 9 — assessment
+
+New permissions:
+
+| Permission                | Allows                                                                                     |
+| ------------------------- | ------------------------------------------------------------------------------------------ |
+| `exam.read`               | View exams                                                                                 |
+| `exam.manage`             | Configure exams, subjects, components, schedules and grade scales; move the exam lifecycle |
+| `marks.enter`             | Enter and submit marks                                                                     |
+| `marks.finalize`          | Finalize a sheet, or reopen one with a reason                                              |
+| `results.read`            | View calculated and published results                                                      |
+| `results.publish`         | Publish results                                                                            |
+| `assignment_grade.manage` | Grade assignment submissions                                                               |
+
+- **Principal / School Admin:** all seven, school-wide.
+- **Teacher:**
+  - `exam.read`, `marks.enter`, `results.read` and `assignment_grade.manage`.
+  - Marks and grading are limited to an open SUBJECT_TEACHER assignment on that exact Section + Subject.
+  - Class results and general remarks are limited to sections where they are CLASS_TEACHER.
+  - Teachers cannot finalize, reopen or publish.
+- **Accountant:** none of these.
+- **Parent / Student:** no permissions. Their results are served only through the relationship- and ownership-scoped mobile routes (the current published snapshot only).

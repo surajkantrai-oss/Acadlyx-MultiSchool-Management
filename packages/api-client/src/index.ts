@@ -84,6 +84,22 @@ import type {
   UpdateTeacherRequest,
 } from '@acadlyx/types';
 import type {
+  AssignmentGrading,
+  ClassResults,
+  CreateExamRequest,
+  ExamDetail,
+  ExamSummary,
+  ExamTransition,
+  GradeBandInput,
+  GradeScale,
+  MarkSheet,
+  MarkSheetSummary,
+  PublishedResultSummary,
+  ReportCard,
+  ResultPublicationSummary,
+  SaveGradeRequest,
+  SaveMarksRequest,
+  UpdateExamRequest,
   AssignmentSubmissionList,
   MobileAttendanceDay,
   MobileChild,
@@ -630,6 +646,10 @@ export function createApiClient(options: ApiClientOptions) {
         request<MobileWorkItem>('GET', `${mobileBase(studentId)}/${kind}/${enc(id)}`),
       timetable: (studentId: string | null) =>
         request<TimetableWeek>('GET', `${mobileBase(studentId)}/timetable`),
+      results: (studentId: string | null) =>
+        request<PublishedResultSummary[]>('GET', `${mobileBase(studentId)}/results`),
+      reportCard: (studentId: string | null, examId: string) =>
+        request<ReportCard>('GET', `${mobileBase(studentId)}/results/${enc(examId)}`),
       submit: (assignmentId: string, body: SubmitAssignmentRequest) =>
         request<MobileWorkItem>(
           'PUT',
@@ -642,6 +662,160 @@ export function createApiClient(options: ApiClientOptions) {
         request<AssignmentSubmissionList>(
           'GET',
           `mobile/teacher/assignments/${enc(assignmentId)}/submissions`,
+        ),
+    },
+
+    /** Phase 9: exams, marks, results, report cards and assignment grading (scoped server-side). */
+    assessment: {
+      gradeScales: (academicYearId: string) =>
+        request<GradeScale[]>('GET', `grade-scales${qs({ academicYearId })}`),
+      saveGradeScale: (
+        id: string | null,
+        body: {
+          academicYearId: string;
+          name: string;
+          bands: GradeBandInput[];
+          expectedVersion?: number;
+        },
+      ) =>
+        request<GradeScale[]>(
+          id ? 'PUT' : 'POST',
+          id ? `grade-scales/${enc(id)}` : 'grade-scales',
+          { body },
+        ),
+      deleteGradeScale: (id: string) => request<null>('DELETE', `grade-scales/${enc(id)}`),
+      exams: (
+        query: {
+          academicYearId?: string;
+          status?: string;
+          q?: string;
+          page?: number;
+          pageSize?: number;
+        } = {},
+      ) => request<Paginated<ExamSummary>>('GET', `exams${qs({ ...query })}`),
+      exam: (id: string) => request<ExamDetail>('GET', `exams/${enc(id)}`),
+      createExam: (body: CreateExamRequest) => request<ExamDetail>('POST', 'exams', { body }),
+      updateExam: (id: string, body: UpdateExamRequest) =>
+        request<ExamDetail>('PATCH', `exams/${enc(id)}`, { body }),
+      deleteExam: (id: string) => request<null>('DELETE', `exams/${enc(id)}`),
+      transition: (id: string, action: ExamTransition, expectedVersion: number) =>
+        request<ExamDetail>('POST', `exams/${enc(id)}/transitions/${action}`, {
+          body: { expectedVersion },
+        }),
+      addSubject: (
+        id: string,
+        body: { gradeId: string; subjectId: string; passMarks?: string | null },
+      ) => request<ExamDetail>('POST', `exams/${enc(id)}/subjects`, { body }),
+      updateSubject: (
+        id: string,
+        examSubjectId: string,
+        body: { passMarks?: string | null; displayOrder?: number },
+      ) =>
+        request<ExamDetail>('PATCH', `exams/${enc(id)}/subjects/${enc(examSubjectId)}`, { body }),
+      removeSubject: (id: string, examSubjectId: string) =>
+        request<ExamDetail>('DELETE', `exams/${enc(id)}/subjects/${enc(examSubjectId)}`),
+      addComponent: (
+        id: string,
+        examSubjectId: string,
+        body: { name: string; maxMarks: string; passMarks?: string | null },
+      ) =>
+        request<ExamDetail>('POST', `exams/${enc(id)}/subjects/${enc(examSubjectId)}/components`, {
+          body,
+        }),
+      updateComponent: (
+        id: string,
+        componentId: string,
+        body: { name?: string; maxMarks?: string; passMarks?: string | null },
+      ) =>
+        request<ExamDetail>('PATCH', `exams/${enc(id)}/components/${enc(componentId)}`, { body }),
+      removeComponent: (id: string, componentId: string) =>
+        request<ExamDetail>('DELETE', `exams/${enc(id)}/components/${enc(componentId)}`),
+      setSchedule: (
+        id: string,
+        componentId: string,
+        branchId: string,
+        body: { examDate: string; startTime: string; endTime: string },
+      ) =>
+        request<ExamDetail>(
+          'PUT',
+          `exams/${enc(id)}/components/${enc(componentId)}/schedules/${enc(branchId)}`,
+          { body },
+        ),
+      removeSchedule: (id: string, componentId: string, branchId: string) =>
+        request<ExamDetail>(
+          'DELETE',
+          `exams/${enc(id)}/components/${enc(componentId)}/schedules/${enc(branchId)}`,
+        ),
+      sheets: (id: string, query: { page?: number; pageSize?: number } = {}) =>
+        request<Paginated<MarkSheetSummary>>('GET', `exams/${enc(id)}/sheets${qs({ ...query })}`),
+      sheet: (id: string, examSubjectId: string, sectionId: string) =>
+        request<MarkSheet>(
+          'GET',
+          `exams/${enc(id)}/sheets/${enc(examSubjectId)}/${enc(sectionId)}`,
+        ),
+      saveMarks: (id: string, examSubjectId: string, sectionId: string, body: SaveMarksRequest) =>
+        request<MarkSheet>(
+          'PUT',
+          `exams/${enc(id)}/sheets/${enc(examSubjectId)}/${enc(sectionId)}`,
+          { body },
+        ),
+      sheetAction: (
+        id: string,
+        examSubjectId: string,
+        sectionId: string,
+        action: 'submit' | 'finalize' | 'reopen',
+        expectedVersion: number,
+        reason?: string,
+      ) =>
+        request<MarkSheet>(
+          'POST',
+          `exams/${enc(id)}/sheets/${enc(examSubjectId)}/${enc(sectionId)}/${action}`,
+          {
+            body: { expectedVersion, ...(reason ? { reason } : {}) },
+          },
+        ),
+      results: (id: string, query: { sectionId?: string; page?: number; pageSize?: number } = {}) =>
+        request<ClassResults>('GET', `exams/${enc(id)}/results${qs({ ...query })}`),
+      preview: (id: string, studentId: string) =>
+        request<ReportCard>('GET', `exams/${enc(id)}/results/students/${enc(studentId)}`),
+      setRemark: (id: string, studentId: string, remark: string | null) =>
+        request<ReportCard>('PUT', `exams/${enc(id)}/remarks/${enc(studentId)}`, {
+          body: { remark },
+        }),
+      publish: (id: string, expectedVersion: number) =>
+        request<ResultPublicationSummary[]>('POST', `exams/${enc(id)}/results/publish`, {
+          body: { expectedVersion },
+        }),
+      publications: (id: string) =>
+        request<ResultPublicationSummary[]>('GET', `exams/${enc(id)}/publications`),
+      publishedCard: (publicationId: string, studentId: string) =>
+        request<ReportCard>(
+          'GET',
+          `result-publications/${enc(publicationId)}/students/${enc(studentId)}`,
+        ),
+      grading: (assignmentId: string) =>
+        request<AssignmentGrading>('GET', `assignments/${enc(assignmentId)}/grading`),
+      saveGrade: (
+        assignmentId: string,
+        submissionId: string,
+        version: number,
+        body: SaveGradeRequest,
+      ) =>
+        request<AssignmentGrading>(
+          'PUT',
+          `assignments/${enc(assignmentId)}/submissions/${enc(submissionId)}/versions/${String(version)}/grade`,
+          { body },
+        ),
+      publishGrade: (
+        assignmentId: string,
+        submissionId: string,
+        version: number,
+        expectedVersion: number,
+      ) =>
+        request<AssignmentGrading>(
+          'POST',
+          `assignments/${enc(assignmentId)}/submissions/${enc(submissionId)}/versions/${String(version)}/grade/publish`,
+          { body: { expectedVersion } },
         ),
     },
 

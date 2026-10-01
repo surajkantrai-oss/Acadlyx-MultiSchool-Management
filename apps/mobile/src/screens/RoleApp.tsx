@@ -23,6 +23,7 @@ import { api } from '../lib/api';
 import { prefs } from '../lib/prefs';
 import { useLoad } from '../lib/use-load';
 import { TabNavigator, useNav } from '../nav/navigator';
+import { ResultsScreen } from './shared/ResultScreens';
 import { HomeSummary, TimetableScreen, WorkHub } from './shared/StudentScreens';
 import {
   ClassesScreen,
@@ -155,6 +156,17 @@ function StudentApp({ me, schoolName, onSwitchRole }: RoleProps) {
             title: 'My work',
             scroll: false,
             render: () => <WorkHub studentId={null} viewer="STUDENT" />,
+          },
+        },
+        {
+          key: 'results',
+          label: 'Results',
+          symbol: '★',
+          root: {
+            key: 'results',
+            title: 'My results',
+            scroll: false,
+            render: () => <ResultsScreen studentId={null} />,
           },
         },
         {
@@ -304,6 +316,17 @@ function ParentApp({ me, schoolName, onSwitchRole, tenantKey }: RoleProps & { te
             title: 'Homework & assignments',
             scroll: false,
             render: () => <WorkHub studentId={id} viewer="PARENT" />,
+          },
+        },
+        {
+          key: 'results',
+          label: 'Results',
+          symbol: '★',
+          root: {
+            key: `results-${id}`,
+            title: 'Results',
+            scroll: false,
+            render: () => <ResultsScreen studentId={id} />,
           },
         },
         {

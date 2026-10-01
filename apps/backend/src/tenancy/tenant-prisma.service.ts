@@ -45,13 +45,20 @@ export class TenantPrismaService implements OnModuleDestroy {
     this.client = createScopedClient(config.get('DATABASE_APP_URL'));
   }
 
-  async run<T>(fn: (tx: TenantTransaction) => Promise<T>): Promise<T> {
+  /**
+   * `options.timeout` raises Prisma's 5 s interactive-transaction limit for the rare bounded bulk
+   * write that must stay atomic (e.g. publishing a whole exam's result snapshots).
+   */
+  async run<T>(
+    fn: (tx: TenantTransaction) => Promise<T>,
+    options?: { timeout?: number },
+  ): Promise<T> {
     const tenantId = TenantContext.getTenantId();
     return this.client.scoped.$transaction(async (tx) => {
       // Parameterised: the tenant id is bound as $1, never interpolated into SQL text.
       await tx.$queryRaw`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
       return fn(tx);
-    });
+    }, options);
   }
 
   /**

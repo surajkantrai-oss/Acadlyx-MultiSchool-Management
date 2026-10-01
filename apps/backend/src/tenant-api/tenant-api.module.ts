@@ -8,6 +8,10 @@ import { ACADEMIC_CONTROLLERS } from './academic/academic.controllers.js';
 import { ACADEMIC_PROVIDERS } from './academic/academic.providers.js';
 import { IMPORT_QUEUE } from './imports/imports.service.js';
 import { MOBILE_CONTROLLERS, MOBILE_PROVIDERS } from './mobile/mobile.controllers.js';
+import {
+  ASSESSMENT_CONTROLLERS,
+  ASSESSMENT_PROVIDERS,
+} from './assessment/assessment.controllers.js';
 import { PEOPLE_CONTROLLERS } from './people/people.controllers.js';
 import { PEOPLE_PROVIDERS } from './people/people.providers.js';
 import {
@@ -30,6 +34,7 @@ const TENANT_CONTROLLERS = [
   ...WORKSPACE_CONTROLLERS,
   ...OPERATIONS_CONTROLLERS,
   ...MOBILE_CONTROLLERS,
+  ...ASSESSMENT_CONTROLLERS,
 ];
 
 /**
@@ -47,6 +52,7 @@ const TENANT_CONTROLLERS = [
     WorkspaceService,
     ...OPERATIONS_PROVIDERS,
     ...MOBILE_PROVIDERS,
+    ...ASSESSMENT_PROVIDERS,
   ],
 })
 export class TenantApiModule implements NestModule {

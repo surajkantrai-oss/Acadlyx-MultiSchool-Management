@@ -503,6 +503,7 @@ function SubmissionPanel({
           {viewer === 'PARENT' ? 'Not submitted yet.' : 'You haven’t submitted yet.'}
         </Caption>
       )}
+      {sub ? <GradePanel item={item} /> : null}
       {viewer === 'STUDENT' && item.blockedReason && item.blockedReason !== 'READ_ONLY' ? (
         <Notice tone="info">{BLOCKED[item.blockedReason] ?? 'Submissions are closed.'}</Notice>
       ) : null}
@@ -525,6 +526,38 @@ function SubmissionPanel({
         />
       ) : null}
     </Section>
+  );
+}
+
+/**
+ * Phase 9 (decisions P/Q): only a PUBLISHED grade of the LATEST submission version is ever sent;
+ * after a resubmission the new version shows "Awaiting grading" (an older grade is never reused).
+ */
+function GradePanel({ item }: { item: MobileWorkItem }) {
+  const g = item.grade;
+  if (!g)
+    return item.awaitingGrading ? (
+      <Card testID="grade-awaiting">
+        <Chip label="Awaiting grading" symbol="…" />
+        <Caption>
+          Version {item.submission?.version ?? 1} hasn’t been graded yet.
+          {item.maxMarks ? ` Marked out of ${item.maxMarks}.` : ''}
+        </Caption>
+      </Card>
+    ) : null;
+  return (
+    <Card testID="grade-published">
+      <Row>
+        <Text style={styles.strong}>
+          {g.marksAwarded !== null && g.maxMarks ? `${g.marksAwarded} / ${g.maxMarks}` : 'Feedback'}
+        </Text>
+        <Chip label="Graded" symbol="✓" tone="good" />
+      </Row>
+      <Caption>
+        For submission version {g.submissionVersion} · {formatInstant(g.publishedAt, item.timezone)}
+      </Caption>
+      {g.feedback ? <Text style={styles.answer}>{g.feedback}</Text> : null}
+    </Card>
   );
 }
 

@@ -4,7 +4,7 @@ Decisions C–L (2026-09-28).
 
 - **Model:** one current `assignment_submissions` row per assignment + student (unique) and an append-only `assignment_submission_history` row for every accepted version.
 - **Content:** text ≤ **5000** chars and/or one **https** URL ≤ **2048** chars; at least one is required. `http:`, `javascript:`, `data:`, `file:` and `ftp:` are rejected (shared validation + DB CHECK). The URL is stored as user text and never fetched.
-- **No files. No grading or feedback** (Phase 9).
+- **No files.** Grading and feedback were added in Phase 9: see [ASSIGNMENT_GRADING.md](ASSIGNMENT_GRADING.md).
 - **Eligibility (G):** recipients were enrolled in the assignment's Section on its `assigned_date`. A student who transferred out keeps read access but cannot submit. Joining later does not make earlier work theirs.
 - **Lifecycle (E):** submit/resubmit only while PUBLISHED, the year is not CLOSED and the student is currently in the Section. After the due date it is accepted as late. CLOSED/ARCHIVED are read-only.
 - **Lateness (D):** derived, not stored — the FIRST submission's branch-local date after the due date. Later edits never change it.

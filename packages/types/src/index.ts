@@ -35,3 +35,4 @@ export * from './people.js';
 export * from './workspace.js';
 export * from './operations.js';
 export * from './mobile.js';
+export * from './assessment.js';

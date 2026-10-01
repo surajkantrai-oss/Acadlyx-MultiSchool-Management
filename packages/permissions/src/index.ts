@@ -165,6 +165,44 @@ export const PERMISSION_REGISTRY = [
     scope: 'TENANT',
     description: 'Configure periods and the weekly class timetable',
   },
+  // Phase 9 — exams, marks, results & report cards; assignment grading. Teachers: scoped by
+  // TeacherAssignment (Section + Subject; class teachers see their section's results).
+  {
+    key: 'exam.read',
+    scope: 'TENANT',
+    description: 'View exams, subjects, components and schedules',
+  },
+  {
+    key: 'exam.manage',
+    scope: 'TENANT',
+    description:
+      'Create and configure exams, grade scales and schedules; move exams through their lifecycle',
+  },
+  {
+    key: 'marks.enter',
+    scope: 'TENANT',
+    description: 'Enter, save and submit marks on a mark sheet',
+  },
+  {
+    key: 'marks.finalize',
+    scope: 'TENANT',
+    description: 'Review and finalize mark sheets, and reopen a finalized sheet with a reason',
+  },
+  {
+    key: 'results.read',
+    scope: 'TENANT',
+    description: 'View calculated and published exam results and report cards',
+  },
+  {
+    key: 'results.publish',
+    scope: 'TENANT',
+    description: 'Publish exam results (creates an immutable result version)',
+  },
+  {
+    key: 'assignment_grade.manage',
+    scope: 'TENANT',
+    description: 'Grade assignment submissions and publish marks/feedback',
+  },
 ] as const satisfies readonly { key: string; scope: AuthScope; description: string }[];
 
 export type PermissionKey = (typeof PERMISSION_REGISTRY)[number]['key'];
@@ -245,6 +283,17 @@ const ACADEMIC_OPERATIONS_MANAGE: readonly PermissionKey[] = [
   'timetable.manage',
 ];
 
+/** Phase 9: exams, marks, results, report cards and assignment grading (leadership). */
+const ASSESSMENT_MANAGE: readonly PermissionKey[] = [
+  'exam.read',
+  'exam.manage',
+  'marks.enter',
+  'marks.finalize',
+  'results.read',
+  'results.publish',
+  'assignment_grade.manage',
+];
+
 /** Phase 4: read-only academic structure needed by staff in later modules. */
 const ACADEMIC_STRUCTURE_READ: readonly PermissionKey[] = [
   'school.read',
@@ -281,6 +330,7 @@ export const ROLE_REGISTRY = [
       ...PEOPLE_MANAGE,
       'school_activity.read',
       ...ACADEMIC_OPERATIONS_MANAGE,
+      ...ASSESSMENT_MANAGE,
     ],
     mfaRequired: true,
     pinAllowed: false,
@@ -298,6 +348,7 @@ export const ROLE_REGISTRY = [
       ...PEOPLE_MANAGE,
       'school_activity.read',
       ...ACADEMIC_OPERATIONS_MANAGE,
+      ...ASSESSMENT_MANAGE,
     ],
     mfaRequired: true,
     pinAllowed: false,
@@ -341,6 +392,11 @@ export const ROLE_REGISTRY = [
       'assignment.read',
       'assignment.manage',
       'timetable.read',
+      // Phase 9: assessment — scoped to assigned Section + Subject (results: class teachers only).
+      'exam.read',
+      'marks.enter',
+      'results.read',
+      'assignment_grade.manage',
     ],
     mfaRequired: false,
     pinAllowed: false,

@@ -8,6 +8,7 @@ import {
   HOMEWORK_STATUSES,
   TIME_PATTERN,
   TIMETABLE_PERIOD_TYPES,
+  MARKS_PATTERN,
 } from '@acadlyx/validation';
 import type { AttendanceStatus, TimetablePeriodType, Weekday } from '@acadlyx/types';
 import { Transform, Type } from 'class-transformer';
@@ -25,6 +26,7 @@ import {
   Min,
   MinLength,
   ValidateNested,
+  ValidateIf,
 } from 'class-validator';
 import { IsIsoDateOnly, PagingQueryDto } from '../people/people.dto.js';
 
@@ -102,6 +104,11 @@ class ClassworkFields {
   @IsIsoDateOnly() dueDate: string;
   /** Leadership only; ignored for teachers (always themselves). */
   @IsOptional() @IsUUID() teacherId?: string | null;
+  /** Phase 9, assignments only: max marks (null = feedback-only grading). Locked once a grade is published. */
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @Matches(MARKS_PATTERN)
+  maxMarks?: string | null;
 }
 
 export class CreateClassworkDto extends ClassworkFields {
@@ -123,6 +130,11 @@ export class UpdateClassworkDto {
   instructions?: string | null;
   @IsOptional() @IsIsoDateOnly() assignedDate?: string;
   @IsOptional() @IsIsoDateOnly() dueDate?: string;
+  /** Phase 9, assignments only: max marks (null = feedback-only grading). Locked once a grade is published. */
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @Matches(MARKS_PATTERN)
+  maxMarks?: string | null;
   @IsOptional() @IsUUID() teacherId?: string | null;
   @Type(() => Number) @IsInt() @Min(1) expectedVersion: number;
 }

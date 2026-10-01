@@ -7,6 +7,8 @@ import type {
   MobileStudentHome,
   MobileWorkItem,
   MobileWorkScope,
+  PublishedResultSummary,
+  ReportCard,
   StudentAttendanceSummary,
   TimetableWeek,
 } from '@acadlyx/types';
@@ -150,6 +152,21 @@ export class MobileParentController {
   }
 
   @Authenticated('TENANT')
+  @Get('children/:studentId/results')
+  results(@Id('studentId') studentId: string): Promise<PublishedResultSummary[]> {
+    return this.mobile.results({ kind: 'PARENT', studentId });
+  }
+
+  @Authenticated('TENANT')
+  @Get('children/:studentId/results/:examId')
+  reportCard(
+    @Id('studentId') studentId: string,
+    @Id('examId') examId: string,
+  ): Promise<ReportCard> {
+    return this.mobile.reportCard({ kind: 'PARENT', studentId }, examId);
+  }
+
+  @Authenticated('TENANT')
   @Get('children/:studentId/timetable')
   timetable(@Id('studentId') studentId: string): Promise<TimetableWeek> {
     return this.mobile.timetable({ kind: 'PARENT', studentId });
@@ -228,6 +245,18 @@ export class MobileStudentController {
   @Get('timetable')
   timetable(): Promise<TimetableWeek> {
     return this.mobile.timetable({ kind: 'STUDENT' });
+  }
+
+  @Authenticated('TENANT')
+  @Get('results')
+  results(): Promise<PublishedResultSummary[]> {
+    return this.mobile.results({ kind: 'STUDENT' });
+  }
+
+  @Authenticated('TENANT')
+  @Get('results/:examId')
+  reportCard(@Id('examId') examId: string): Promise<ReportCard> {
+    return this.mobile.reportCard({ kind: 'STUDENT' }, examId);
   }
 }
 

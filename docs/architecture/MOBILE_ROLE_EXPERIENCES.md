@@ -33,4 +33,11 @@ Stored locally per school; at launch it is kept only if the server still lists t
 
 ## Deferred
 
-Exams/marks/results (Phase 9), fees, notices, messaging, notifications, documents/files, transport, calendar.
+Fees, notices, messaging, notifications, documents/files, transport, calendar.
+
+## Phase 9 — results and grades
+
+- **Results tab** (Parent: the selected, server-verified child; Student: self). It shows a virtualised list (`FlatList`) of the current published exam results. Selecting one opens the report card: school branding (runtime theme and snapshot school name), the student, exam and year, subjects with their components (marks / “Absent” / “Exempt”), totals, %, grade, PASS/FAIL/EXEMPT, the overall result, the class-teacher remark and the publication version.
+- **Unpublished results are never returned.** When nothing has been published, the tab shows “No published results yet”.
+- **Assignment grades:** only the published grade of the latest submission version is shown, labelled with that version. After a resubmission the item shows “Awaiting grading”, and a previous grade is never reused.
+- **Read-only.** Parents and students cannot edit marks or remarks, publish or reopen. Teacher grading is web-only (decision R).

@@ -54,6 +54,15 @@ export function ClassworkForm({
       setNotice({ tone: 'danger', messages: Object.values(errs) });
       return;
     }
+    if (kind === 'assignments' && v.maxMarks && !/^\d{1,5}(\.\d{1,2})?$/.test(v.maxMarks)) {
+      setErrors({ maxMarks: 'Maximum marks must be a positive number (2 decimals)' });
+      setNotice({
+        tone: 'danger',
+        messages: ['Maximum marks must be a positive number (2 decimals)'],
+      });
+      return;
+    }
+    const extra = kind === 'assignments' ? { maxMarks: v.maxMarks || null } : {};
     setErrors({});
     let createdId: string | null = null;
     const ok = await run(
@@ -61,12 +70,12 @@ export function ClassworkForm({
         if (item) {
           await bffApi(`${kind}/${item.id}`, {
             method: 'PATCH',
-            body: { ...parsed.data, expectedVersion: item.version },
+            body: { ...parsed.data, ...extra, expectedVersion: item.version },
           });
         } else {
           const created = await bffApi<ClassworkItem>(kind, {
             method: 'POST',
-            body: { ...parsed.data, sectionId: v.sectionId, subjectId: v.subjectId },
+            body: { ...parsed.data, ...extra, sectionId: v.sectionId, subjectId: v.subjectId },
           });
           createdId = created.id;
         }
@@ -166,6 +175,17 @@ export function ClassworkForm({
           error={errors.dueDate}
         />
       </div>
+      {kind === 'assignments' ? (
+        <TextField
+          idPrefix={id}
+          name="maxMarks"
+          label="Maximum marks (optional)"
+          hint="Leave blank for feedback-only grading. Locked once a grade is published."
+          inputMode="decimal"
+          defaultValue={item?.maxMarks ?? ''}
+          error={errors.maxMarks}
+        />
+      ) : null}
       <div>
         <Button type="submit" disabled={busy}>
           {item ? 'Save changes' : 'Create draft'}

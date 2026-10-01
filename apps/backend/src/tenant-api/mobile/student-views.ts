@@ -172,9 +172,25 @@ async function toItems(
           rows.map((r) => r.id),
         )
       : new Map<string, SubmissionRow>();
+  // Phase 9 (decisions P/Q): only a PUBLISHED grade of the LATEST submission version is visible;
+  // a draft, or a grade of an older version, never is ("awaiting grading" instead).
+  const latestIds = [...subs.values()].map((x) => x.id);
+  const grades = latestIds.length
+    ? await tx.assignmentSubmissionGrade.findMany({
+        where: { submissionId: { in: latestIds }, status: 'PUBLISHED' },
+        include: { submissionVersion: { select: { version: true } } },
+      })
+    : [];
   return rows.map((r) => {
     const tz = r.section.branch.timezone;
     const sub = subs.get(r.id);
+    const maxMarks =
+      kind === 'assignments'
+        ? ((r as { maxMarks?: { toFixed(n: number): string } | null }).maxMarks?.toFixed(2) ?? null)
+        : null;
+    const g = sub
+      ? grades.find((x) => x.submissionId === sub.id && x.submissionVersion.version === sub.version)
+      : undefined;
     const blocked = kind === 'assignments' ? submissionBlock(r, enrollments, viewer) : 'READ_ONLY';
     return {
       id: r.id,
@@ -190,6 +206,18 @@ async function toItems(
       status: r.status,
       overdue: localToday(tz) > isoDate(r.dueDate),
       submission: sub ? toSubmission(sub, r.dueDate, tz) : null,
+      maxMarks,
+      grade:
+        g && g.publishedAt
+          ? {
+              submissionVersion: sub?.version ?? 0,
+              marksAwarded: g.marksAwarded?.toFixed(2) ?? null,
+              maxMarks,
+              feedback: g.feedback,
+              publishedAt: g.publishedAt.toISOString(),
+            }
+          : null,
+      awaitingGrading: kind === 'assignments' && Boolean(sub) && !g,
       canSubmit: kind === 'assignments' && blocked === null,
       blockedReason: kind === 'assignments' ? blocked : null,
     };

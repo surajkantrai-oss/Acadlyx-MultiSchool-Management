@@ -14,8 +14,11 @@ export function BrandedFrame({
 }) {
   const name = tenant.branding?.schoolName ?? tenant.displayName;
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="text-white" style={{ backgroundColor: 'var(--brand-primary)' }}>
+    <div className="min-h-screen bg-slate-50 text-slate-900 print:bg-white">
+      <header
+        className="text-white print:hidden"
+        style={{ backgroundColor: 'var(--brand-primary)' }}
+      >
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-4">
           {tenant.branding?.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- tenant logos are arbitrary external https URLs
@@ -36,8 +39,10 @@ export function BrandedFrame({
           ) : null}
         </div>
       </header>
-      <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8">{children}</main>
-      <footer className="mx-auto max-w-6xl px-4 pb-8 text-xs text-slate-500">
+      <main className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-8 print:max-w-none print:p-0">
+        {children}
+      </main>
+      <footer className="mx-auto max-w-6xl px-4 pb-8 text-xs text-slate-500 print:hidden">
         {tenant.branding?.footerText ?? `${name} · Powered by ${APP_NAME}`}
         {tenant.branding?.supportEmail ? ` · ${tenant.branding.supportEmail}` : ''}
       </footer>

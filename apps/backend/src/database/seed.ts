@@ -25,6 +25,8 @@ import type {
   Weekday,
 } from '../generated/prisma/client.js';
 import { PlatformPrismaService } from './platform-prisma.service.js';
+import { calculateStudent } from '../tenant-api/assessment/result-calc.js';
+import { Prisma } from '../generated/prisma/client.js';
 
 interface DemoTenant {
   key: string;
@@ -1273,6 +1275,518 @@ async function seedOperations(prisma: PrismaClient): Promise<void> {
   }
 }
 
+/**
+ * Phase 9 demo assessment data (fictional, idempotent — skipped when the exam already exists).
+ * SCHOOL_A: a grade scale; "Mid Term" for Grade 5 (Mathematics with Written + Internal, English,
+ * EVS with Theory + Practical) with every Grade 5 A mark finalized and results PUBLISHED as version
+ * 1 (computed by the SAME canonical engine the API uses); "Unit Test 2" open for marks entry
+ * (nothing entered); and a gradable assignment with a submission and a published grade.
+ * SCHOOL_B: its own grade scale and a draft exam. Official numbers are exact decimals.
+ */
+async function seedAssessment(prisma: PrismaClient): Promise<void> {
+  const D = Prisma.Decimal;
+  const BANDS: [string, number, number][] = [
+    ['A1', 90, 100],
+    ['A2', 80, 90],
+    ['B1', 70, 80],
+    ['B2', 60, 70],
+    ['C1', 50, 60],
+    ['C2', 40, 50],
+    ['D', 33, 40],
+    ['E', 0, 33],
+  ];
+  for (const key of ['SCHOOL_A', 'SCHOOL_B']) {
+    const tenant = await prisma.tenant.findUnique({ where: { key } });
+    const school = tenant
+      ? await prisma.school.findFirst({
+          where: { tenantId: tenant.id },
+          orderBy: { createdAt: 'asc' },
+        })
+      : null;
+    const year = school
+      ? await prisma.academicYear.findFirst({ where: { schoolId: school.id, isCurrent: true } })
+      : null;
+    if (!tenant || !school || !year) continue;
+    const scope = { tenantId: tenant.id, schoolId: school.id };
+    const actor = await prisma.user.findFirst({
+      where: { tenantId: tenant.id, roles: { some: { role: { key: 'PRINCIPAL' } } } },
+    });
+    if (!actor) continue;
+    const scaleName = key === 'SCHOOL_A' ? 'CBSE 2026–27' : 'School grades 2026–27';
+    let scale = await prisma.gradeScale.findFirst({
+      where: { schoolId: school.id, academicYearId: year.id, name: scaleName },
+    });
+    if (!scale) {
+      scale = await prisma.gradeScale.create({
+        data: { ...scope, academicYearId: year.id, name: scaleName },
+      });
+      await prisma.gradeBand.createMany({
+        data: BANDS.map(([label, min, max], i) => ({
+          ...scope,
+          gradeScaleId: scale?.id ?? '',
+          label,
+          minPercentage: min,
+          maxPercentage: max,
+          displayOrder: i,
+        })),
+      });
+    }
+    let created = 0;
+    if (key === 'SCHOOL_B') {
+      const grade = await prisma.grade.findFirst({
+        where: { schoolId: school.id },
+        orderBy: { displayOrder: 'desc' },
+      });
+      const gs = grade
+        ? await prisma.gradeSubject.findFirst({
+            where: { gradeId: grade.id },
+            orderBy: { displayOrder: 'asc' },
+          })
+        : null;
+      if (
+        grade &&
+        gs &&
+        !(await prisma.exam.findFirst({
+          where: { schoolId: school.id, name: 'Term 1 Assessment' },
+        }))
+      ) {
+        const exam = await prisma.exam.create({
+          data: {
+            ...scope,
+            academicYearId: year.id,
+            gradeScaleId: scale.id,
+            name: 'Term 1 Assessment',
+            startDate: new Date('2026-11-09'),
+            endDate: new Date('2026-11-13'),
+            createdByUserId: actor.id,
+          },
+        });
+        const sub = await prisma.examSubject.create({
+          data: {
+            ...scope,
+            examId: exam.id,
+            academicYearId: year.id,
+            gradeId: grade.id,
+            subjectId: gs.subjectId,
+            passMarks: 33,
+          },
+        });
+        await prisma.examComponent.create({
+          data: {
+            ...scope,
+            examSubjectId: sub.id,
+            examId: exam.id,
+            gradeId: grade.id,
+            name: 'Written',
+            maxMarks: 100,
+          },
+        });
+        created += 1;
+      }
+      process.stdout.write(`  assessment ${key}: grade scale + ${String(created)} exam(s)\n`);
+      continue;
+    }
+    const grade = await prisma.grade.findFirst({ where: { schoolId: school.id, code: 'G5' } });
+    const branch = await prisma.branch.findFirst({ where: { schoolId: school.id, code: 'MAIN' } });
+    const section =
+      grade && branch
+        ? await prisma.section.findFirst({
+            where: {
+              schoolId: school.id,
+              gradeId: grade.id,
+              branchId: branch.id,
+              academicYearId: year.id,
+              code: 'A',
+            },
+          })
+        : null;
+    const subj = async (code: string) =>
+      prisma.subject.findFirst({ where: { schoolId: school.id, code } });
+    const [math, eng, evs] = [await subj('MATH'), await subj('ENG'), await subj('EVS')];
+    if (!grade || !branch || !section || !math || !eng || !evs) continue;
+    const branches = await prisma.section.findMany({
+      where: { schoolId: school.id, gradeId: grade.id, academicYearId: year.id, isActive: true },
+      select: { branchId: true },
+      distinct: ['branchId'],
+    });
+
+    /** Exam + subjects + components + a schedule per branch; returns component ids by key. */
+    const build = async (
+      name: string,
+      start: string,
+      end: string,
+      status: 'MARKS_ENTRY' | 'DRAFT',
+      plan: [string, typeof math, string | null, [string, number, number | null, string][]][],
+    ) => {
+      const exam = await prisma.exam.create({
+        data: {
+          ...scope,
+          academicYearId: year.id,
+          gradeScaleId: scale.id,
+          name,
+          startDate: new Date(start),
+          endDate: new Date(end),
+          status,
+          publishedAt: status === 'DRAFT' ? null : new Date(),
+          createdByUserId: actor.id,
+        },
+      });
+      const comps: Record<
+        string,
+        { id: string; subjectId: string; examSubjectId: string; date: string }
+      > = {};
+      let order = 0;
+      for (const [skey, s, pass, components] of plan) {
+        const es = await prisma.examSubject.create({
+          data: {
+            ...scope,
+            examId: exam.id,
+            academicYearId: year.id,
+            gradeId: grade.id,
+            subjectId: s.id,
+            passMarks: pass ? new D(pass) : null,
+            displayOrder: order++,
+          },
+        });
+        let corder = 0;
+        for (const [cname, max, cpass, date] of components) {
+          const c = await prisma.examComponent.create({
+            data: {
+              ...scope,
+              examSubjectId: es.id,
+              examId: exam.id,
+              gradeId: grade.id,
+              name: cname,
+              maxMarks: max,
+              passMarks: cpass,
+              displayOrder: corder++,
+            },
+          });
+          const hour = 9 + corder;
+          for (const b of branches)
+            await prisma.$executeRaw`INSERT INTO exam_component_schedules (id, tenant_id, school_id, component_id, exam_id, grade_id, branch_id, exam_date, start_time, end_time, updated_at)
+              VALUES (gen_random_uuid(), ${tenant.id}::uuid, ${school.id}::uuid, ${c.id}::uuid, ${exam.id}::uuid, ${grade.id}::uuid, ${b.branchId}::uuid, ${date}::date,
+                ${`${String(hour).padStart(2, '0')}:00`}::time, ${`${String(hour).padStart(2, '0')}:50`}::time, now())`;
+          comps[`${skey}.${cname}`] = { id: c.id, subjectId: s.id, examSubjectId: es.id, date };
+        }
+      }
+      return { exam, comps };
+    };
+
+    if (!(await prisma.exam.findFirst({ where: { schoolId: school.id, name: 'Mid Term' } }))) {
+      const { exam, comps } = await build('Mid Term', '2026-09-14', '2026-09-19', 'MARKS_ENTRY', [
+        [
+          'MATH',
+          math,
+          '33',
+          [
+            ['Written', 80, null, '2026-09-14'],
+            ['Internal', 20, null, '2026-09-15'],
+          ],
+        ],
+        ['ENG', eng, '33', [['Written', 100, null, '2026-09-16']]],
+        [
+          'EVS',
+          evs,
+          '17',
+          [
+            ['Theory', 40, 13, '2026-09-17'],
+            ['Practical', 10, null, '2026-09-18'],
+          ],
+        ],
+      ]);
+      const enrolled = await prisma.studentEnrollment.findMany({
+        where: {
+          sectionId: section.id,
+          startDate: { lte: new Date('2026-09-14') },
+          OR: [{ endDate: null }, { endDate: { gt: new Date('2026-09-18') } }],
+        },
+        include: { student: true },
+        orderBy: { student: { admissionNumber: 'asc' } },
+      });
+      // Fictional marks: [Written, Internal, English, EVS Theory, EVS Practical]; null = ABSENT.
+      const table: (number | null)[][] = [
+        [68, 17, 81, 35, 9],
+        [52.5, 15, 64, 12, 8],
+        [74, 18, null, 31, 10],
+        [45, 12, 58, 22, 7],
+      ];
+      const keys = ['MATH.Written', 'MATH.Internal', 'ENG.Written', 'EVS.Theory', 'EVS.Practical'];
+      const sheets = new Map<string, string>();
+      for (const k of keys) {
+        const c = comps[k];
+        if (!c || sheets.has(c.examSubjectId)) continue;
+        const sheet = await prisma.examMarkSheet.create({
+          data: {
+            ...scope,
+            examSubjectId: c.examSubjectId,
+            examId: exam.id,
+            gradeId: grade.id,
+            academicYearId: year.id,
+            sectionId: section.id,
+            status: 'FINALIZED',
+            version: 4,
+            submittedByUserId: actor.id,
+            submittedAt: new Date(),
+            finalizedByUserId: actor.id,
+            finalizedAt: new Date(),
+          },
+        });
+        sheets.set(c.examSubjectId, sheet.id);
+        await prisma.examMarkSheetEvent.createMany({
+          data: [
+            {
+              ...scope,
+              sheetId: sheet.id,
+              fromStatus: 'DRAFT',
+              toStatus: 'SUBMITTED',
+              actorUserId: actor.id,
+            },
+            {
+              ...scope,
+              sheetId: sheet.id,
+              fromStatus: 'SUBMITTED',
+              toStatus: 'FINALIZED',
+              actorUserId: actor.id,
+            },
+          ],
+        });
+      }
+      const marksBy = new Map<
+        string,
+        Map<string, { status: 'MARKED' | 'ABSENT'; marks: number | null }>
+      >();
+      for (const [i, e] of enrolled.entries()) {
+        const row = table[i % table.length] ?? [];
+        const map = new Map<string, { status: 'MARKED' | 'ABSENT'; marks: number | null }>();
+        for (const [j, k] of keys.entries()) {
+          const c = comps[k];
+          if (!c) continue;
+          const v = row[j] ?? null;
+          const status = v === null ? 'ABSENT' : 'MARKED';
+          const m = await prisma.studentExamMark.create({
+            data: {
+              ...scope,
+              sheetId: sheets.get(c.examSubjectId) ?? '',
+              examSubjectId: c.examSubjectId,
+              componentId: c.id,
+              studentId: e.studentId,
+              status,
+              marksObtained: v,
+              updatedByUserId: actor.id,
+            },
+          });
+          await prisma.studentExamMarkHistory.create({
+            data: {
+              ...scope,
+              markId: m.id,
+              version: 1,
+              toStatus: status,
+              toMarks: v,
+              changedByUserId: actor.id,
+            },
+          });
+          map.set(c.id, { status, marks: v });
+        }
+        marksBy.set(e.studentId, map);
+      }
+      // Publish version 1 through the canonical engine.
+      const bands = BANDS.map(([label, min, max]) => ({ label, min, max }));
+      const full = await prisma.exam.findUniqueOrThrow({
+        where: { id: exam.id },
+        include: { subjects: { include: { subject: true, components: true } } },
+      });
+      const subjects = full.subjects.map((s) => ({
+        examSubjectId: s.id,
+        subjectName: s.subject.name,
+        passMarks: s.passMarks,
+        displayOrder: s.displayOrder,
+        components: s.components.map((c) => ({
+          id: c.id,
+          name: c.name,
+          maxMarks: c.maxMarks,
+          passMarks: c.passMarks,
+          displayOrder: c.displayOrder,
+        })),
+      }));
+      const pub = await prisma.resultPublication.create({
+        data: {
+          ...scope,
+          examId: exam.id,
+          version: 1,
+          schoolName: school.name,
+          examName: exam.name,
+          academicYearName: year.name,
+          publishedByUserId: actor.id,
+          publishedAt: new Date(),
+        },
+      });
+      for (const e of enrolled) {
+        const r = calculateStudent({
+          subjects,
+          marks: marksBy.get(e.studentId) ?? new Map(),
+          eligible: new Set(Object.values(comps).map((c) => c.id)),
+          bands,
+        });
+        const snap = await prisma.resultStudentSnapshot.create({
+          data: {
+            ...scope,
+            publicationId: pub.id,
+            studentId: e.studentId,
+            sectionId: section.id,
+            studentName: [e.student.firstName, e.student.middleName, e.student.lastName]
+              .filter(Boolean)
+              .join(' '),
+            admissionNumber: e.student.admissionNumber,
+            gradeName: grade.name,
+            sectionName: section.name,
+            totalObtained: r.obtained,
+            totalMax: r.maxMarks,
+            percentage: r.percentage,
+            gradeLabel: r.grade,
+            outcome: r.status as 'PASS' | 'FAIL',
+          },
+        });
+        for (const s of r.subjects) {
+          const ss = await prisma.resultSubjectSnapshot.create({
+            data: {
+              ...scope,
+              studentSnapshotId: snap.id,
+              subjectName: s.subjectName,
+              displayOrder: s.displayOrder,
+              obtained: s.obtained,
+              maxMarks: s.maxMarks,
+              passMarks: s.passMarks,
+              percentage: s.percentage,
+              gradeLabel: s.grade,
+              outcome: s.outcome as 'PASS' | 'FAIL',
+            },
+          });
+          await prisma.resultComponentSnapshot.createMany({
+            data: s.components.map((c) => ({
+              ...scope,
+              subjectSnapshotId: ss.id,
+              componentName: c.name,
+              displayOrder: c.displayOrder,
+              maxMarks: c.maxMarks,
+              passMarks: c.passMarks,
+              status: c.status ?? 'EXEMPT',
+              marksObtained: c.marks,
+              passed: c.passed,
+            })),
+          });
+        }
+      }
+      await prisma.exam.update({
+        where: { id: exam.id },
+        data: { status: 'RESULTS_PUBLISHED', version: 6 },
+      });
+      created += 1;
+    }
+    if (!(await prisma.exam.findFirst({ where: { schoolId: school.id, name: 'Unit Test 2' } }))) {
+      await build('Unit Test 2', '2026-10-12', '2026-10-16', 'MARKS_ENTRY', [
+        ['MATH', math, '10', [['Written', 25, null, '2026-10-13']]],
+        ['ENG', eng, '10', [['Written', 25, null, '2026-10-14']]],
+      ]);
+      created += 1;
+    }
+    // A gradable assignment with Aarav's submission and a published grade (decisions O–Q).
+    let graded = 0;
+    const aarav = await prisma.student.findFirst({
+      where: { schoolId: school.id, admissionNumber: 'STU001' },
+    });
+    const ravi = await prisma.teacher.findFirst({
+      where: { schoolId: school.id, employeeId: 'TCH001' },
+    });
+    if (
+      aarav &&
+      ravi &&
+      !(await prisma.assignment.findFirst({
+        where: { sectionId: section.id, title: 'Fractions quiz' },
+      }))
+    ) {
+      const a = await prisma.assignment.create({
+        data: {
+          ...scope,
+          sectionId: section.id,
+          subjectId: math.id,
+          teacherId: ravi.id,
+          title: 'Fractions quiz',
+          instructions: 'Answer the ten fraction questions from the worksheet.',
+          assignedDate: new Date('2026-09-21'),
+          dueDate: new Date('2026-09-25'),
+          status: 'PUBLISHED',
+          publishedAt: new Date(),
+          maxMarks: 20,
+          createdByUserId: ravi.userId ?? actor.id,
+        },
+      });
+      const when = new Date('2026-09-24T10:00:00Z');
+      const sub = await prisma.assignmentSubmission.create({
+        data: {
+          ...scope,
+          assignmentId: a.id,
+          studentId: aarav.id,
+          textContent: '1) 3/4  2) 5/8  3) 1/2 …',
+          firstSubmittedAt: when,
+          lastSubmittedAt: when,
+        },
+      });
+      const hist = await prisma.assignmentSubmissionHistory.create({
+        data: {
+          ...scope,
+          submissionId: sub.id,
+          version: 1,
+          textContent: sub.textContent,
+          submittedAt: when,
+          submittedByUserId: aarav.userId ?? actor.id,
+        },
+      });
+      const g = await prisma.assignmentSubmissionGrade.create({
+        data: {
+          ...scope,
+          submissionHistoryId: hist.id,
+          submissionId: sub.id,
+          assignmentId: a.id,
+          studentId: aarav.id,
+          status: 'PUBLISHED',
+          marksAwarded: 16,
+          feedback: 'Good work — check question 7.',
+          version: 2,
+          gradedByUserId: ravi.userId ?? actor.id,
+          publishedAt: new Date(),
+        },
+      });
+      await prisma.assignmentSubmissionGradeHistory.createMany({
+        data: [
+          {
+            ...scope,
+            gradeId: g.id,
+            version: 1,
+            status: 'DRAFT',
+            marksAwarded: 16,
+            feedback: g.feedback,
+            changedByUserId: g.gradedByUserId,
+          },
+          {
+            ...scope,
+            gradeId: g.id,
+            version: 2,
+            status: 'PUBLISHED',
+            marksAwarded: 16,
+            feedback: g.feedback,
+            changedByUserId: g.gradedByUserId,
+          },
+        ],
+      });
+      graded = 1;
+    }
+    process.stdout.write(
+      `  assessment ${key}: grade scale + ${String(created)} exam(s), ${String(graded)} graded assignment\n`,
+    );
+  }
+}
+
 async function main(): Promise<void> {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('Refusing to seed demo tenants in production');
@@ -1341,6 +1855,7 @@ async function main(): Promise<void> {
     await seedAcademic(prisma, Object.fromEntries(DEMO_TENANTS.map((d) => [d.key, d.timezone])));
     await seedPeople(prisma);
     await seedOperations(prisma);
+    await seedAssessment(prisma);
   } finally {
     await app.close();
   }

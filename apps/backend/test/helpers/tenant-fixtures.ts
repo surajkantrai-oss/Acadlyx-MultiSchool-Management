@@ -31,6 +31,24 @@ export async function purgeTenants(prisma: PlatformPrismaService, prefix: string
   ).map((t) => t.id);
   const byTenant = { tenantId: { in: tenantIds } };
   await prisma.$transaction([
+    // Phase 9 (history/snapshots first, then marks/sheets, then configuration).
+    prisma.assignmentSubmissionGradeHistory.deleteMany({ where: byTenant }),
+    prisma.assignmentSubmissionGrade.deleteMany({ where: byTenant }),
+    prisma.resultComponentSnapshot.deleteMany({ where: byTenant }),
+    prisma.resultSubjectSnapshot.deleteMany({ where: byTenant }),
+    prisma.resultStudentSnapshot.deleteMany({ where: byTenant }),
+    prisma.resultPublication.deleteMany({ where: byTenant }),
+    prisma.studentExamRemark.deleteMany({ where: byTenant }),
+    prisma.studentExamMarkHistory.deleteMany({ where: byTenant }),
+    prisma.studentExamMark.deleteMany({ where: byTenant }),
+    prisma.examMarkSheetEvent.deleteMany({ where: byTenant }),
+    prisma.examMarkSheet.deleteMany({ where: byTenant }),
+    prisma.examComponentSchedule.deleteMany({ where: byTenant }),
+    prisma.examComponent.deleteMany({ where: byTenant }),
+    prisma.examSubject.deleteMany({ where: byTenant }),
+    prisma.exam.deleteMany({ where: byTenant }),
+    prisma.gradeBand.deleteMany({ where: byTenant }),
+    prisma.gradeScale.deleteMany({ where: byTenant }),
     // Phase 8 submissions reference assignments/students — delete them first.
     prisma.assignmentSubmissionHistory.deleteMany({ where: byTenant }),
     prisma.assignmentSubmission.deleteMany({ where: byTenant }),

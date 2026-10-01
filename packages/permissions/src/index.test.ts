@@ -12,7 +12,12 @@ import {
 } from './index.js';
 
 /** Phase 7 per-class operations teachers may perform (scoped by TeacherAssignment). */
-const CLASS_OPERATIONS: string[] = ['attendance.manage', 'homework.manage', 'assignment.manage'];
+const CLASS_OPERATIONS: string[] = [
+  'attendance.manage',
+  'homework.manage',
+  'assignment.manage',
+  'assignment_grade.manage',
+];
 
 describe('RBAC registry', () => {
   it('defines the approved system roles with unique keys and valid permissions', () => {
@@ -214,5 +219,32 @@ describe('Phase 7 academic operations', () => {
         permissionsForRoles([role]).filter((k) => ops.includes(k)),
         role,
       ).toEqual([]);
+  });
+
+  it('Phase 9: leadership runs assessment; teachers are scoped; no one else gets results', () => {
+    const all = [
+      'exam.read',
+      'exam.manage',
+      'marks.enter',
+      'marks.finalize',
+      'results.read',
+      'results.publish',
+      'assignment_grade.manage',
+    ];
+    for (const role of ['PRINCIPAL', 'SCHOOL_ADMIN'])
+      expect(permissionsForRoles([role])).toEqual(expect.arrayContaining(all));
+    const teacher = permissionsForRoles(['TEACHER']);
+    expect(teacher).toEqual(
+      expect.arrayContaining([
+        'exam.read',
+        'marks.enter',
+        'results.read',
+        'assignment_grade.manage',
+      ]),
+    );
+    for (const k of ['exam.manage', 'marks.finalize', 'results.publish'])
+      expect(teacher).not.toContain(k);
+    for (const role of ['ACCOUNTANT', 'PARENT', 'STUDENT', 'TRANSPORT_MANAGER'])
+      expect(permissionsForRoles([role]).filter((k) => all.includes(k))).toEqual([]);
   });
 });

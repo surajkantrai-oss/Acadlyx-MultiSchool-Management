@@ -92,3 +92,14 @@ Full design: [../architecture/MULTI_TENANCY.md](../architecture/MULTI_TENANCY.md
 - Tenant-bound builds: the tenant key is public identification, never auth. A session for another tenant is rejected (403) and discarded by the app.
 - SecureStore holds the refresh token and non-sensitive per-school preferences; the access token and academic data live in memory; sign-out clears them all.
 - Submission URLs are https-only, stored as text and never fetched server-side; submission content never enters the AuditLog.
+
+## Phase 9 — assessment
+
+- **Permission and scope must both pass.** Out-of-scope ids return 404. A student id from the client is never proof of access: the parent's child is verified through StudentGuardian, and the student through their own profile.
+- **Parents and students read only the current published snapshot.** Live marks, draft sheets, previews and draft grades are never returned to them.
+- **Marks cannot be overwritten silently.** They are validated in the service and again by database triggers/CHECKs. Every change is versioned; a stale version returns 409.
+- **History is append-only.** Mark history, sheet events, grade history and result snapshots are SELECT/INSERT only for the app role.
+- **The AuditLog holds ids, counts and version numbers only.** It never stores marks, snapshots, remarks or feedback text. The activity feed is exam/class level only.
+- **Negative controls (2026-09-30):**
+  - Removing teacher scope, the parent relationship check, student ownership, the unpublished gate, the mark-range check or the sheet version check made the tests fail.
+  - Removing the app tenant filter left every Phase 9 isolation test passing, because RLS still enforced isolation.

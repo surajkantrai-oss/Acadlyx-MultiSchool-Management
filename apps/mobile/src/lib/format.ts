@@ -1,4 +1,10 @@
-import type { AttendanceStatus, TimetableEntry, Weekday } from '@acadlyx/types';
+import type {
+  AttendanceStatus,
+  ComponentResultView,
+  OverallResultStatus,
+  TimetableEntry,
+  Weekday,
+} from '@acadlyx/types';
 
 /*
  * Display helpers (pure, unit-tested). Dates are school-local `YYYY-MM-DD` and are formatted as
@@ -78,4 +84,38 @@ export function groupWeek(
       .filter((e) => e.weekday === day)
       .sort((a, b) => a.startTime.localeCompare(b.startTime)),
   }));
+}
+
+// ---- Results (Phase 9) -------------------------------------------------------------------------
+
+/** Result outcomes: always words (plus a symbol on the chip), never colour alone. */
+export const OUTCOME_LABEL: Record<OverallResultStatus, string> = {
+  PASS: 'Pass',
+  FAIL: 'Fail',
+  EXEMPT: 'Exempt',
+  INCOMPLETE: 'Incomplete',
+};
+
+export function outcomeTone(status: OverallResultStatus): {
+  symbol: string;
+  tone: 'good' | 'bad' | 'neutral' | 'warn';
+} {
+  switch (status) {
+    case 'PASS':
+      return { symbol: '✓', tone: 'good' };
+    case 'FAIL':
+      return { symbol: '✕', tone: 'bad' };
+    case 'EXEMPT':
+      return { symbol: '–', tone: 'neutral' };
+    case 'INCOMPLETE':
+      return { symbol: '…', tone: 'warn' };
+  }
+}
+
+/** One component line: "Absent", "Exempt", or "obtained / max" (with "below pass mark"). */
+export function componentLabel(c: ComponentResultView): string {
+  if (c.status === 'ABSENT') return `Absent (0 / ${c.maxMarks})`;
+  if (c.status === 'EXEMPT') return 'Exempt';
+  if (c.status === null || c.marks === null) return 'Not entered';
+  return `${c.marks} / ${c.maxMarks}${c.passed === false ? ' · below pass mark' : ''}`;
 }

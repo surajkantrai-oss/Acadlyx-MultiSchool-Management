@@ -256,7 +256,23 @@ export async function ClassworkDetailPage({
           <dt className="text-xs text-slate-500">Created by</dt>
           <dd>{i.createdByName ?? '—'}</dd>
         </div>
+        {kind === 'assignments' ? (
+          <div>
+            <dt className="text-xs text-slate-500">Maximum marks</dt>
+            <dd>{i.maxMarks ?? 'Feedback only'}</dd>
+          </div>
+        ) : null}
       </dl>
+      {kind === 'assignments' && i.status !== 'DRAFT' && ctx.can('assignment_grade.manage') ? (
+        <p>
+          <Link
+            href={`/assignments/${i.id}/grading`}
+            className="inline-flex rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+          >
+            Submissions &amp; grading
+          </Link>
+        </p>
+      ) : null}
       {i.instructions ? (
         <Card title="Instructions">
           <p className="whitespace-pre-wrap">{i.instructions}</p>

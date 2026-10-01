@@ -9,8 +9,27 @@
 | 5     | Students, Parents, Teachers & Bulk Onboarding              | **COMPLETE** (2026-09-27, commit `64bc4e1`) |
 | 6     | School Admin Portal Core                                   | **COMPLETE** (2026-09-28, commit `d079903`) |
 | 7     | Attendance, Homework, Assignments & Timetable              | **COMPLETE** (2026-09-28, commit `acdd3b5`) |
-| 8     | White-Label Mobile App & Role Experiences                  | **COMPLETE — awaiting review** (2026-09-29) |
-| 9–15  | Later phases per project plan (15 = production deployment) | NOT STARTED                                 |
+| 8     | White-Label Mobile App & Role Experiences                  | **COMPLETE** (2026-09-29, commit `ab9fa42`) |
+| 9     | Exams, Marks, Results & Report Cards                       | **COMPLETE — awaiting review** (2026-10-01) |
+| 10–15 | Later phases per project plan (15 = production deployment) | NOT STARTED                                 |
+
+## Phase 9 verification (2026-10-01)
+
+Uncommitted, awaiting review. HEAD is `ab9fa42` (Phase 8). Migration
+`20260930100000_phase_9_exams_marks_results_report_cards` (sha256 `1c650b17…`); the Phase 2–8
+checksums are unchanged.
+
+| Check                                                                                                                                                                                                                          | Result |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| Fresh-database replay: roles → 7 migrations → generate → RBAC sync → seed ×2 (second run added nothing) → full backend tests (383)                                                                                             | PASS   |
+| `pnpm install --frozen-lockfile`, format, lint, typecheck, test (packages 60, backend 383, mobile 8), build, `validate:mobile`                                                                                                 | PASS   |
+| Backend e2e: exams, branch schedules, marks, history, sheet lifecycle, grade scales, results, publication/versioning, report-card snapshots, assignment grading, races, A→B/B→C/C→A, same-tenant second school, activity/audit | PASS   |
+| Direct RLS tests on all 17 Phase 9 tables (SELECT/INSERT/UPDATE/DELETE; grants; triggers; composite FKs)                                                                                                                       | PASS   |
+| Negative controls A–G (teacher scope, parent link, student ownership, unpublished gate, mark range, sheet version, app tenant filter → RLS holds)                                                                              | PASS   |
+| School Admin e2e (47) and Platform Admin e2e (13)                                                                                                                                                                              | PASS   |
+| Scale smoke (5,000 students, 800 sheets, 160,000 marks): paginated sheet list 79–100 ms / 24 SQL; publish ≈ 20.5 s (scoped 60 s transaction)                                                                                   | PASS   |
+| Browser walkthrough (Principal, Teacher Ravi, class teacher, correction → v2, snapshot immutability, print view)                                                                                                               | PASS   |
+| iOS Simulator walkthrough (Student Aarav, Parent Pooja → Aarav/Anaya, report card, assignment grade v2, largest text size)                                                                                                     | PASS   |
 
 ## Phase 7 verification (2026-09-28)
 

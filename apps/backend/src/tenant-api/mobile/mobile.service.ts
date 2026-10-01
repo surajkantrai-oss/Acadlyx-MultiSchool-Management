@@ -7,6 +7,8 @@ import type {
   MobileStudentHome,
   MobileWorkItem,
   MobileWorkScope,
+  PublishedResultSummary,
+  ReportCard,
   StudentAttendanceSummary,
   TimetableWeek,
 } from '@acadlyx/types';
@@ -25,6 +27,8 @@ import {
   teacherProfile,
 } from './mobile-scope.js';
 import * as views from './student-views.js';
+import { publishedResultsFor, snapshotCard } from '../assessment/results.service.js';
+import { ASSESSMENT_ERRORS } from '../assessment/assessment-errors.js';
 
 const MOBILE_ROLES: readonly MobileRole[] = ['PARENT', 'STUDENT', 'TEACHER'];
 
@@ -167,5 +171,19 @@ export class MobileService {
 
   timetable(subject: Subject): Promise<TimetableWeek> {
     return this.withStudent(subject, (tx, school, s) => views.timetable(tx, school, s.id));
+  }
+
+  /** Phase 9: the student's CURRENT published results only (never live marks or drafts). */
+  results(subject: Subject): Promise<PublishedResultSummary[]> {
+    return this.withStudent(subject, (tx, school, s) => publishedResultsFor(tx, school, s.id));
+  }
+
+  /** Phase 9: report card = the current publication snapshot; unpublished → 404. */
+  reportCard(subject: Subject, examId: string): Promise<ReportCard> {
+    return this.withStudent(subject, async (tx, school, s) => {
+      const found = await snapshotCard(tx, school, { examId, studentId: s.id });
+      if (!found) throw ASSESSMENT_ERRORS.resultNotPublished();
+      return found.card;
+    });
   }
 }

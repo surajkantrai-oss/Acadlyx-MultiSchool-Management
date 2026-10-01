@@ -216,3 +216,17 @@ the web auth e2e suites. It does not deploy.
 ### White-label mobile & role experiences (Phase 8)
 
 One React Native codebase, one school per build, no school picker. Choose the school with `ACADLYX_TENANT` (e.g. `school-a`, `school-b`; see `apps/mobile/white-label/`). Parents (linked children only), Students (self only; text + https-link submissions) and Teachers (assigned classes/subjects) get role-specific tabs. See [docs/architecture/WHITE_LABEL_MOBILE.md](docs/architecture/WHITE_LABEL_MOBILE.md), [MOBILE_ROLE_EXPERIENCES.md](docs/architecture/MOBILE_ROLE_EXPERIENCES.md), [ASSIGNMENT_SUBMISSIONS.md](docs/architecture/ASSIGNMENT_SUBMISSIONS.md) and [docs/api/MOBILE.md](docs/api/MOBILE.md).
+
+### Exams, marks, results & report cards (Phase 9)
+
+In School Admin, go to **Academics → Exams**:
+
+1. Set up grade scales.
+2. Create an exam: grades → subjects → components → per-branch schedules.
+3. Publish the exam, then open marks entry. Teachers enter marks for their own Section + Subject, save a draft and submit.
+4. Leadership finalizes the sheets, then finalizes the exam's marks.
+5. Review the class results and publish them. Each publication is an immutable version, and a correction creates version 2.
+
+The report card has a print-friendly view. Assignments can be graded on the web (`max_marks` is optional), and parents and students see only published results and grades in the mobile **Results** tab.
+
+See [EXAMS_AND_MARKS.md](docs/architecture/EXAMS_AND_MARKS.md), [RESULTS_AND_REPORT_CARDS.md](docs/architecture/RESULTS_AND_REPORT_CARDS.md), [ASSIGNMENT_GRADING.md](docs/architecture/ASSIGNMENT_GRADING.md) and [docs/api/ASSESSMENT.md](docs/api/ASSESSMENT.md).

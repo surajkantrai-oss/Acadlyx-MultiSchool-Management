@@ -3,7 +3,8 @@ import type { ClassworkItem, ClassworkKind, ClassworkTarget } from '@acadlyx/typ
 import { Injectable } from '@nestjs/common';
 import { currentAuth } from '../../auth/core/access.guard.js';
 import type { AuditEvent } from '../../common/audit/audit.service.js';
-import type { Prisma, School } from '../../generated/prisma/client.js';
+import { Prisma, type School } from '../../generated/prisma/client.js';
+import { conflict } from '../../common/errors/domain-errors.js';
 import type { TenantTransaction } from '../../tenancy/tenant-prisma.service.js';
 import { AcademicStore } from '../academic/academic-store.js';
 import { paginated, paging } from '../people/people-mappers.js';
@@ -202,6 +203,9 @@ export class ClassworkService {
             dueDate: fromIsoDate(dto.dueDate),
             status: 'DRAFT',
             createdByUserId: authUserId(),
+            ...(kind === 'assignments' && dto.maxMarks
+              ? { maxMarks: new Prisma.Decimal(dto.maxMarks) }
+              : {}),
           },
         });
         events.push(
@@ -242,7 +246,27 @@ export class ClassworkService {
             : {}),
           ...(dto.dueDate !== undefined ? { dueDate: fromIsoDate(dto.dueDate) } : {}),
           ...(dto.teacherId !== undefined ? { teacherId } : {}),
+          ...(kind === 'assignments' && dto.maxMarks !== undefined
+            ? { maxMarks: dto.maxMarks ? new Prisma.Decimal(dto.maxMarks) : null }
+            : {}),
         };
+        // Phase 9: max marks are historically locked once any grade has been published.
+        if (kind === 'assignments' && dto.maxMarks !== undefined) {
+          const published = await tx.assignmentSubmissionGrade.count({
+            where: { assignmentId: row.id, status: 'PUBLISHED' },
+          });
+          const current = (row as { maxMarks?: Prisma.Decimal | null }).maxMarks ?? null;
+          const next = dto.maxMarks ? new Prisma.Decimal(dto.maxMarks) : null;
+          const same =
+            (current === null && next === null) ||
+            (current !== null && next !== null && current.eq(next));
+          if (published > 0 && !same)
+            throw conflict(
+              'MAX_MARKS_LOCKED',
+              'Maximum marks cannot change once a grade has been published',
+            );
+          if (next !== null && next.lte(0)) throw OPS_ERRORS.invalidMaxMarks();
+        }
         const res = await this.model(tx, kind).updateMany({
           where: { id: row.id, version: dto.expectedVersion, status: row.status as 'DRAFT' },
           data: { ...data, version: { increment: 1 } },
@@ -442,6 +466,10 @@ export class ClassworkService {
       instructions: r.instructions,
       assignedDate: isoDate(r.assignedDate),
       dueDate: isoDate(r.dueDate),
+      maxMarks:
+        kind === 'assignments'
+          ? ((r as { maxMarks?: Prisma.Decimal | null }).maxMarks?.toFixed(2) ?? null)
+          : null,
       status: r.status,
       version: r.version,
       createdByName: names.get(r.createdByUserId) ?? null,

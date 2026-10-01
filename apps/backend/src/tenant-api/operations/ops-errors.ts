@@ -5,6 +5,7 @@ import { badRequest, conflict, notFound } from '../../common/errors/domain-error
  * are simply "not found"; constraint names and SQL never reach clients.
  */
 export const OPS_ERRORS = {
+  invalidMaxMarks: () => badRequest('MAX_MARKS_INVALID', 'Maximum marks must be greater than 0'),
   sectionNotFound: () => notFound('SECTION_NOT_FOUND', 'Class not found'),
   sessionNotFound: () => notFound('ATTENDANCE_NOT_FOUND', 'Attendance not found'),
   studentNotFound: () => notFound('STUDENT_NOT_FOUND', 'Student not found'),

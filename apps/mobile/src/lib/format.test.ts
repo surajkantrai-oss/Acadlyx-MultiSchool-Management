@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { dueLabel, formatDate, formatInstant, groupWeek, rateLabel } from './format';
+import {
+  componentLabel,
+  dueLabel,
+  formatDate,
+  formatInstant,
+  groupWeek,
+  OUTCOME_LABEL,
+  outcomeTone,
+  rateLabel,
+} from './format';
 
 describe('mobile formatting', () => {
   it('formats school-local dates without shifting by the device time zone', () => {
@@ -37,5 +46,22 @@ describe('mobile formatting', () => {
     );
     expect(week.map((d) => d.day)).toEqual(['MONDAY', 'TUESDAY']);
     expect(week[0]?.lessons.map((l) => l.startTime)).toEqual(['09:00', '10:00']);
+  });
+
+  it('labels result states in words (never colour alone)', () => {
+    const base = { name: 'Theory', maxMarks: '80.00', passMarks: '28.00' };
+    expect(componentLabel({ ...base, status: 'MARKED', marks: '72.50', passed: true })).toBe(
+      '72.50 / 80.00',
+    );
+    expect(componentLabel({ ...base, status: 'MARKED', marks: '20.00', passed: false })).toBe(
+      '20.00 / 80.00 · below pass mark',
+    );
+    expect(componentLabel({ ...base, status: 'ABSENT', marks: null, passed: false })).toBe(
+      'Absent (0 / 80.00)',
+    );
+    expect(componentLabel({ ...base, status: 'EXEMPT', marks: null, passed: null })).toBe('Exempt');
+    expect(OUTCOME_LABEL.FAIL).toBe('Fail');
+    expect(outcomeTone('PASS').symbol).toBe('✓');
+    expect(outcomeTone('INCOMPLETE').tone).toBe('warn');
   });
 });
